@@ -27,6 +27,79 @@ from playwright.sync_api import sync_playwright
 # ========= 黑名单(失败 N 次的车牌不再自动重试) =========
 SKIP_PLATES = set()
 
+# ========= 处理结果记录（跑完后导出 Excel） =========
+import time as _time
+RESULTS = []  # [{plate, flow_type, start_time, end_time, status, error}]
+
+
+def export_results_excel():
+    """把处理结果导出为 Excel 报表"""
+    if not RESULTS:
+        return None
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment
+    except ImportError:
+        # 没装 openpyxl 就用 CSV
+        import csv
+        path = f"hccheck_results_{_time.strftime('%Y%m%d_%H%M%S')}.csv"
+        with open(path, "w", newline="", encoding="utf-8-sig") as f:
+            writer = csv.DictWriter(f, fieldnames=["车牌", "流程类型", "开始时间", "结束时间", "耗时(秒)", "状态", "错误信息"])
+            writer.writeheader()
+            for r in RESULTS:
+                dur = ""
+                if r["start_time"] and r["end_time"]:
+                    dur = f"{r['end_time'] - r['start_time']:.1f}"
+                writer.writerow({
+                    "车牌": r["plate"],
+                    "流程类型": r["flow_type"],
+                    "开始时间": _time.strftime("%Y-%m-%d %H:%M:%S", _time.localtime(r["start_time"])) if r["start_time"] else "",
+                    "结束时间": _time.strftime("%Y-%m-%d %H:%M:%S", _time.localtime(r["end_time"])) if r["end_time"] else "",
+                    "耗时(秒)": dur,
+                    "状态": r["status"],
+                    "错误信息": r.get("error", ""),
+                })
+        return path
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "处理结果"
+    headers = ["车牌", "流程类型", "开始时间", "结束时间", "耗时(秒)", "状态", "错误信息"]
+    ws.append(headers)
+    # 表头样式
+    for cell in ws[1]:
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill(start_color="1a73e8", end_color="1a73e8", fill_type="solid")
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+    # 数据
+    for r in RESULTS:
+        dur = ""
+        if r["start_time"] and r["end_time"]:
+            dur = round(r["end_time"] - r["start_time"], 1)
+        ws.append([
+            r["plate"],
+            r["flow_type"],
+            _time.strftime("%Y-%m-%d %H:%M:%S", _time.localtime(r["start_time"])) if r["start_time"] else "",
+            _time.strftime("%Y-%m-%d %H:%M:%S", _time.localtime(r["end_time"])) if r["end_time"] else "",
+            dur,
+            r["status"],
+            r.get("error", ""),
+        ])
+        # 状态列上色
+        status_cell = ws.cell(row=ws.max_row, column=6)
+        if r["status"] == "成功":
+            status_cell.fill = PatternFill(start_color="d4edda", end_color="d4edda", fill_type="solid")
+        else:
+            status_cell.fill = PatternFill(start_color="f8d7da", end_color="f8d7da", fill_type="solid")
+    # 列宽
+    col_widths = [12, 10, 20, 20, 10, 8, 30]
+    for i, w in enumerate(col_widths, 1):
+        ws.column_dimensions[chr(64 + i)].width = w
+
+    path = f"hccheck_results_{_time.strftime('%Y%m%d_%H%M%S')}.xlsx"
+    wb.save(path)
+    return path
+
 
 # ========= Helper 函数 =========
 def goto_workbench(page):
@@ -1257,8 +1330,17 @@ def main():
                         print(f"\n{'='*55}")
                         print(f"  第 {processed} 辆: {plate}")
                         try:
+                            _t0 = _time.time()
                             dispatch(page, plate, run_from_step, processed)
                             print(f"\n  ✅ {plate} 全部流程完成")
+                            RESULTS.append({
+                                "plate": plate,
+                                "flow_type": "带挂" if "挂" in plate else "不带挂",
+                                "start_time": _t0,
+                                "end_time": _time.time(),
+                                "status": "成功",
+                                "error": "",
+                            })
                             failures.pop(plate, None)
                         except Exception as e:
                             failures[plate] = failures.get(plate, 0) + 1
@@ -1266,6 +1348,14 @@ def main():
                             print(f"\n  ❌ {plate} 处理失败 ({fc}/{config.MAX_FAIL}): {e}")
                             screenshot_on_error(page, plate)
                             _close_all_popups(page)
+                            RESULTS.append({
+                                "plate": plate,
+                                "flow_type": "带挂" if "挂" in plate else "不带挂",
+                                "start_time": _t0,
+                                "end_time": _time.time(),
+                                "status": "失败",
+                                "error": str(e),
+                            })
                             if fc >= config.MAX_FAIL:
                                 SKIP_PLATES.add(plate)
                                 print(f"  ⏭ {plate} 已加入黑名单,不再自动重试")
@@ -1314,8 +1404,17 @@ def main():
                 print(f"\n{'='*55}")
                 print(f"  第 {processed} 辆: {plate}")
                 try:
+                    _t0 = _time.time()
                     dispatch(page, plate, run_from_step, processed)
                     print(f"\n  ✅ {plate} 全部流程完成")
+                    RESULTS.append({
+                        "plate": plate,
+                        "flow_type": "带挂" if "挂" in plate else "不带挂",
+                        "start_time": _t0,
+                        "end_time": _time.time(),
+                        "status": "成功",
+                        "error": "",
+                    })
                     failures.pop(plate, None)
                     step("当前车辆完成,准备处理下一辆")
                 except Exception as e:
@@ -1324,6 +1423,14 @@ def main():
                     print(f"\n  ❌ {plate} 处理失败 ({fc}/{config.MAX_FAIL}): {e}")
                     screenshot_on_error(page, plate)
                     _close_all_popups(page)
+                    RESULTS.append({
+                        "plate": plate,
+                        "flow_type": "带挂" if "挂" in plate else "不带挂",
+                        "start_time": _t0,
+                        "end_time": _time.time(),
+                        "status": "失败",
+                        "error": str(e),
+                    })
                     if fc >= config.MAX_FAIL:
                         SKIP_PLATES.add(plate)
                         print(f"  ⏭ {plate} 已加入黑名单,不再自动重试")
@@ -1354,6 +1461,12 @@ def main():
                 browser.close()
             except:
                 pass
+            # 导出处理结果
+            if RESULTS:
+                path = export_results_excel()
+                if path:
+                    print(f"\n  📊 处理结果已导出: {path}")
+                    print(f"  📈 总计: {len(RESULTS)} 辆 (成功: {sum(1 for r in RESULTS if r['status']=='成功')}, 失败: {sum(1 for r in RESULTS if r['status']=='失败')})")
             print("  🚪 程序已退出")
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 # 运行依赖
 playwright>=1.40.0
+openpyxl>=3.0.0  # 导出处理结果 Excel（如未安装会降级为 CSV）
 
 # 打包依赖（仅开发机需要）
 # pyinstaller>=6.0
