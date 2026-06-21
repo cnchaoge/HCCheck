@@ -1,0 +1,24 @@
+# 用户配置（含账号密码，不提交）
+.user_config.json
+
+# 打包产物
+dist/
+build/
+*.spec
+*.exe
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+
+# 截图（调试用）
+err_*.png
+
+# IDE
+.vscode/
+.idea/
+*.swp
+python.zip
