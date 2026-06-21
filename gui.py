@@ -370,6 +370,71 @@ class App(tk.Tk):
         self.after(3000, lambda: self.settings_status_var.set(""))
 
     # --------------------------------------------------------
+    # 启动前登录对话框
+    # --------------------------------------------------------
+    def _show_login_dialog(self):
+        """弹出登录输入框, 返回 (username, password, ok)"""
+        dialog = tk.Toplevel(self)
+        dialog.title("登录运管站")
+        dialog.geometry("380x200")
+        dialog.transient(self)
+        dialog.grab_set()
+        dialog.resizable(False, False)
+
+        result = {"username": "", "password": "", "ok": False}
+
+        # 标题
+        ttk.Label(dialog, text="🚛 请输入运管站登录账号",
+                  font=("Microsoft YaHei", 12, "bold")).pack(pady=(16, 8))
+
+        # 账号
+        row1 = ttk.Frame(dialog)
+        row1.pack(fill=tk.X, padx=24, pady=4)
+        ttk.Label(row1, text="账号:", width=6, anchor=tk.E).pack(side=tk.LEFT)
+        username_var = tk.StringVar(value=self.username_var.get())
+        ttk.Entry(row1, textvariable=username_var, width=24).pack(side=tk.LEFT, padx=(4, 0))
+
+        # 密码
+        row2 = ttk.Frame(dialog)
+        row2.pack(fill=tk.X, padx=24, pady=4)
+        ttk.Label(row2, text="密码:", width=6, anchor=tk.E).pack(side=tk.LEFT)
+        password_var = tk.StringVar(value=self.password_var.get())
+        ttk.Entry(row2, textvariable=password_var, width=24, show="●").pack(side=tk.LEFT, padx=(4, 0))
+
+        # 记住密码
+        remember_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(dialog, text="记住密码(保存到本地)", variable=remember_var).pack(pady=(4, 0))
+
+        # 按钮
+        def on_login():
+            result["username"] = username_var.get().strip()
+            result["password"] = password_var.get()
+            result["ok"] = True
+            # 如果勾了记住密码，存到主设置里
+            if remember_var.get():
+                self.username_var.set(result["username"])
+                self.password_var.set(result["password"])
+                self._save_all_settings()
+            dialog.destroy()
+
+        def on_cancel():
+            result["ok"] = False
+            dialog.destroy()
+
+        btn_frame = ttk.Frame(dialog)
+        btn_frame.pack(pady=12)
+        ttk.Button(btn_frame, text="🔑 登录", command=on_login, width=12).pack(side=tk.LEFT, padx=4)
+        ttk.Button(btn_frame, text="取消", command=on_cancel, width=12).pack(side=tk.LEFT, padx=4)
+
+        # 回车键快捷登录
+        dialog.bind("<Return>", lambda e: on_login())
+        dialog.bind("<Escape>", lambda e: on_cancel())
+
+        # 模态等待
+        dialog.wait_window()
+        return result["username"], result["password"], result["ok"]
+
+    # --------------------------------------------------------
     # 日志操作
     # --------------------------------------------------------
     def _append_log(self, text: str):
@@ -433,9 +498,14 @@ class App(tk.Tk):
         if self.running:
             return
 
-        # 确认弹窗
-        if not messagebox.askyesno("确认启动", "即将启动自动化流程。\n\n将打开 Chrome 浏览器，请使用 USB Key 或账号密码登录。\n\n确认开始吗？"):
+        # 弹出登录对话框
+        username, password, ok = self._show_login_dialog()
+        if not ok:
             return
+        # 临时覆盖 config 的账号密码（本次启动用）
+        config.LOGIN_USERNAME = username
+        config.LOGIN_PASSWORD = password
+        config.LOGIN_AUTO_SUBMIT = True
 
         self._apply_config()
         self.running = True
