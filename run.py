@@ -1112,30 +1112,22 @@ def get_next_plate_from_list(page):
     # 扫描所有 table (可能分多页)
     try:
         tables = main_kef.locator("table")
-        print(f"  🔍 调试: 共 {tables.count()} 个 table")
         for t_idx in range(tables.count()):
             rows = tables.nth(t_idx).locator("tbody tr")
-            print(f"  🔍 table[{t_idx}]: {rows.count()} 行")
             for r in range(rows.count()):
                 cells = rows.nth(r).locator("td")
-                cell_count = cells.count()
-                # 调试: 打印每行所有列内容
-                cell_texts = [cells.nth(c).text_content().strip() for c in range(cell_count)]
-                print(f"  🔍 row[{r}] (cols={cell_count}): {cell_texts}")
                 # 检查年审审批流水号列(索引2)是否为空
-                if cell_count > 2:
+                if cells.count() > 2:
                     flow_no = cells.nth(2).text_content().strip()
-                    print(f"    └─ flow_no(列2)='{flow_no}', skip={bool(flow_no)}")
                     if flow_no:
                         continue  # 有流水号,跳过
                 # 找车牌号(扫描所有列)
-                for c in range(cell_count):
+                for c in range(cells.count()):
                     txt = cells.nth(c).text_content().strip()
                     if config.PLATE_RE.match(txt):
                         if txt in SKIP_PLATES:
                             print(f"  ⏭ 跳过已拉黑: {txt}")
                             continue
-                        print(f"  ✅ 找到待审车牌: {txt}")
                         return txt
     except Exception as e:
         print(f"  ⚠️ 读取年审列表失败: {e}")
@@ -1293,10 +1285,6 @@ def main():
                     print(f"  普货审验自动导航失败: {e}")
                     input("  >>> 请手动点左侧[普货审验],然后按回车...")
                 plate = get_next_plate_from_list(page)
-                if plate:
-                    print(f"  取到车牌: {plate}")
-                else:
-                    print("  ⚠️ 未取到车牌,可能列表无待审车辆")
                 if not plate:
                     empty_count += 1
                     if empty_count >= 2:
