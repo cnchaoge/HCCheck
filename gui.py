@@ -478,10 +478,15 @@ class App(tk.Tk):
             messagebox.showinfo("导出成功", f"日志已保存到:\n{path}")
 
     def _consume_log_queue(self):
-        """从队列中取出日志并写入文本框（线程安全）"""
+        """从队列中取出日志并写入文本框（线程安全）
+        顺便处理特殊信号：__WORKER_DONE__ 表示 worker thread 已退出
+        """
         try:
             while True:
                 text = self.log_queue.get_nowait()
+                if text == "__WORKER_DONE__":
+                    self._on_worker_done()
+                    continue
                 self._append_log(text)
         except queue.Empty:
             pass
@@ -542,7 +547,11 @@ class App(tk.Tk):
         self.worker_thread.start()
 
     def _run_worker(self):
-        """后台线程运行主流程"""
+        """后台线程运行主流程
+        退出时往 log_queue 推一个 __WORKER_DONE__ 特殊信号，
+        主线程的 _consume_log_queue 会消费后触发 _on_worker_done()
+        比之前用 self.after() 在子线程调主线程更可靠，不会丢
+        """
         try:
             run_main()
         except SystemExit:
@@ -552,7 +561,7 @@ class App(tk.Tk):
         finally:
             sys.stdout = sys.__stdout__
             sys.stderr = sys.__stderr__
-            self.after(0, self._on_worker_done)
+            self.log_queue.put("__WORKER_DONE__")
 
     def _on_worker_done(self):
         self.running = False
