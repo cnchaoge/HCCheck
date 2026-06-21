@@ -11,6 +11,7 @@ import os
 import time
 import queue
 import json
+import subprocess
 
 # 确保能导入同目录模块
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -369,6 +370,19 @@ class App(tk.Tk):
         self.settings_status_var.set("✓ 已保存")
         self.after(3000, lambda: self.settings_status_var.set(""))
 
+        # 如果启用了定时任务，同步到 Windows 任务计划
+        if cfg.get("schedule_enabled"):
+            cron = cfg.get("schedule", "")
+            if cron:
+                ok, msg = register_schtask(cron)
+                if ok:
+                    messagebox.showinfo("定时任务", f"{msg}\n\n点击确定后可以在后台运行，无需保持 GUI 打开")
+                else:
+                    messagebox.showwarning("定时任务", msg)
+        else:
+            # 取消定时任务
+            unregister_schtask()
+
     # --------------------------------------------------------
     # 启动前登录对话框
     # --------------------------------------------------------
@@ -574,8 +588,126 @@ class App(tk.Tk):
 
 
 # ============================================================
+# Windows 任务计划集成（定时任务调度）
+# ============================================================
+def register_schtask(cron_expr, exe_path=None):
+    """把 cron 表达式注册到 Windows 任务计划
+    Args:
+        cron_expr: Cron 表达式，如 '0 8 * * *' (每天8点)
+        exe_path: HCCheck.exe 路径, 默认为当前 Python
+    Returns:
+        (success: bool, message: str)
+    """
+    if sys.platform != "win32":
+        return False, "非 Windows 系统不支持此功能"
+
+    if not cron_expr:
+        return False, "请先配置定时规则"
+
+    parts = cron_expr.split()
+    if len(parts) != 5:
+        return False, f"Cron 表达式格式错误: {cron_expr}"
+
+    minute, hour, day, month, weekday = parts
+
+    if exe_path is None:
+        exe_path = sys.executable
+
+    # 只处理"每天/工作日/自定义星期" 三种场景
+    if day != "*" or month != "*":
+        return False, "暂不支持指定日期/月份，仅支持每天/工作日/周几"
+
+    # 转换星期 (cron: 0=周日, 1-5=周一-周五; schtasks: MON,TUE,WED,THU,FRI,SAT,SUN)
+    weekday_map = {
+        "1-5": "MON,TUE,WED,THU,FRI",
+        "0": "SUN",
+        "1": "MON",
+        "2": "TUE",
+        "3": "WED",
+        "4": "THU",
+        "5": "FRI",
+        "6": "SAT",
+    }
+
+    if weekday == "*":
+        # 每天
+        sc_type = "DAILY"
+        sc_value = None
+    elif weekday == "1-5":
+        # 工作日
+        sc_type = "WEEKLY"
+        sc_value = "MON,TUE,WED,THU,FRI"
+    elif "," in weekday:
+        # 自定义多天
+        days = []
+        for d in weekday.split(","):
+            d = d.strip()
+            if d in weekday_map:
+                days.append(weekday_map[d])
+        sc_type = "WEEKLY"
+        sc_value = ",".join(days)
+    else:
+        # 单天
+        sc_type = "WEEKLY"
+        sc_value = weekday_map.get(weekday, "MON")
+
+    # 先删除旧任务
+    delete_cmd = ["schtasks", "/delete", "/tn", "HCCheck_Auto", "/f"]
+    subprocess.run(delete_cmd, capture_output=True, shell=False)
+
+    # 构建创建命令
+    start_time = f"{hour.zfill(2)}:{minute.zfill(2)}"
+    cmd = [
+        "schtasks", "/create",
+        "/tn", "HCCheck_Auto",
+        "/tr", f'"{exe_path}" --headless',
+        "/sc", sc_type,
+        "/st", start_time,
+    ]
+    if sc_value:
+        cmd.extend(["/d", sc_value])
+    cmd.append("/f")  # 强制覆盖
+
+    result = subprocess.run(cmd, capture_output=True, text=True, shell=False)
+    if result.returncode == 0:
+        cycle_desc = {
+            "DAILY": "每天",
+            "WEEKLY": f"每周{sc_value}",
+        }.get(sc_type, sc_type)
+        return True, f"已注册定时任务：{cycle_desc} {start_time} 自动运行"
+    else:
+        return False, f"注册失败: {result.stderr or result.stdout}"
+
+
+def unregister_schtask():
+    """从 Windows 任务计划删除"""
+    if sys.platform != "win32":
+        return False, "非 Windows 系统不支持此功能"
+    cmd = ["schtasks", "/delete", "/tn", "HCCheck_Auto", "/f"]
+    result = subprocess.run(cmd, capture_output=True, text=True, shell=False)
+    if result.returncode == 0:
+        return True, "已取消定时任务"
+    else:
+        return False, f"取消失败: {result.stderr or '任务不存在'}"
+
+
+# ============================================================
 # 入口
 # ============================================================
+def _run_headless():
+    """无头模式入口：供 Windows 任务计划调用"""
+    from run import main as run_main
+    print("=" * 60)
+    print("  HCCheck 无头模式（定时任务触发）")
+    print("=" * 60)
+    run_main()
+
+
 if __name__ == "__main__":
-    app = App()
-    app.mainloop()
+    if "--headless" in sys.argv:
+        # 无头模式：不开 GUI，直接跑主流程
+        _run_headless()
+    else:
+        # 正常 GUI 模式
+        app = App()
+        app.mainloop()
