@@ -433,6 +433,10 @@ class App(tk.Tk):
         if self.running:
             return
 
+        # 确认弹窗
+        if not messagebox.askyesno("确认启动", "即将启动自动化流程。\n\n将打开 Chrome 浏览器，请使用 USB Key 或账号密码登录。\n\n确认开始吗？"):
+            return
+
         self._apply_config()
         self.running = True
         self.btn_start.config(state=tk.DISABLED)
