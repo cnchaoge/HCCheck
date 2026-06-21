@@ -1179,10 +1179,16 @@ def _phase2_finish(popup, page):
     pa(2)
 
 def dispatch(page, plate, run_from_step=None, processed=0):
-    if "挂" in plate:
-        process_marked(page, plate, run_from_step, processed)
-    else:
-        process_unmarked(page, plate, run_from_step, processed)
+    # 通知 GUI：当前正在处理 plate
+    config.CURRENT_PLATE = plate
+    try:
+        if "挂" in plate:
+            process_marked(page, plate, run_from_step, processed)
+        else:
+            process_unmarked(page, plate, run_from_step, processed)
+    finally:
+        # 无论成功/异常,都清空状态,让 GUI 知道进入空闲
+        config.CURRENT_PLATE = ""
 
 # ========= 从列表拿车牌 =========
 def get_next_plate_from_list(page):
@@ -1272,6 +1278,11 @@ def main():
             failures = {}
 
             while True:
+                # === 检查强制停止信号 ===
+                if config.FORCE_STOP:
+                    print("\n⛔ 强制停止信号已接收，立即退出")
+                    break
+
                 # === 第一步: 检查工作台是否有未完成的任务(续跑) ===
                 goto_workbench(page)
 

@@ -522,6 +522,10 @@ class App(tk.Tk):
         config.LOGIN_AUTO_SUBMIT = True
 
         self._apply_config()
+        # 重置停止控制状态（防止上一次未清理的信号影响本次启动）
+        config.CURRENT_PLATE = ""
+        config.FORCE_STOP = False
+        config.SINGLE_RUN = False
         self.running = True
         self.btn_start.config(state=tk.DISABLED)
         self.btn_stop.config(state=tk.NORMAL)
@@ -552,18 +556,31 @@ class App(tk.Tk):
 
     def _on_worker_done(self):
         self.running = False
+        config.CURRENT_PLATE = ""
+        config.FORCE_STOP = False
         self.btn_start.config(state=tk.NORMAL)
         self.btn_stop.config(state=tk.DISABLED)
         self.plate_var.set("已停止")
         self.step_var.set("—")
 
     def _stop(self):
-        """温和停止：当前车辆处理完毕后自然退出"""
+        """智能停止：有车在跑 → 等跑完；空闲 → 强制停
+        - CURRENT_PLATE 非空 → 设 SINGLE_RUN=True，等当前车跑完自然退出
+        - CURRENT_PLATE 空   → 设 FORCE_STOP=True，主循环下一圈立即 break
+        """
         if not self.running:
             return
-        config.SINGLE_RUN = True
-        self.log_queue.put("\n⏹ 停止信号已发送，当前车辆处理完毕后自动退出...\n")
-        self.plate_var.set("停止中...")
+        current = config.CURRENT_PLATE
+        if current:
+            # 有车在跑 → 温和停止
+            config.SINGLE_RUN = True
+            self.log_queue.put(f"\n⏹ 停止信号已发送，当前车 [{current}] 处理完毕后自动退出...\n")
+            self.plate_var.set(f"停止中({current})...")
+        else:
+            # 没车在跑 → 强制停止
+            config.FORCE_STOP = True
+            self.log_queue.put("\n⛔ 强制停止信号已发送，主循环下一圈立即退出...\n")
+            self.plate_var.set("强制停止中...")
         self.btn_stop.config(state=tk.DISABLED)
 
     # --------------------------------------------------------

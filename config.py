@@ -15,6 +15,13 @@ MAX_FAIL = 3             # 同一辆车失败 N 次进黑名单
 HEADLESS = False         # True: 无头模式(不推荐,看不到弹窗)
 SLOW = 0.5               # pa() 默认 sleep 秒
 
+# ========= 停止控制（GUI ↔ 主循环通信） =========
+# GUI 按"停止"时：
+#   CURRENT_PLATE 非空 → 设 SINGLE_RUN=True → 当前车跑完后温和退出
+#   CURRENT_PLATE 空   → 设 FORCE_STOP=True   → 主循环下一圈立即 break
+CURRENT_PLATE = ""       # 当前正在处理的车牌（空 = 空闲）
+FORCE_STOP = False       # 强制停止标志（True 时主循环下一圈立即 break）
+
 # ========= 站点 =========
 URL = "https://221.195.18.1:8181/yg/loginAction.do"
 
