@@ -27,6 +27,18 @@ from playwright.sync_api import sync_playwright
 # ========= 黑名单(失败 N 次的车牌不再自动重试) =========
 SKIP_PLATES = set()
 
+
+# ========= Helper 函数 =========
+def goto_workbench(page):
+    """切到工作台, 失败不抛异常（容错）"""
+    contents = page.frame_locator(config.SELECTOR_FRAME_CONTENTS)
+    try:
+        safe(contents.get_by_role("link", name=config.MENU_WORKBENCH), timeout=5000).click()
+        pa(2)
+    except:
+        pass
+
+
 # ========= 登录 + 导航 =========
 def wait_for_login_and_navigate(page, username="", password="", auto_submit=False):
     page.goto(config.URL, wait_until="domcontentloaded")
@@ -251,12 +263,7 @@ def read_workbench_node(page, plate):
     """从工作台读某辆车的当前节点
     Returns: STEP_XXX 或 None (未找到)
     """
-    contents = page.frame_locator(config.SELECTOR_FRAME_CONTENTS)
-    try:
-        safe(contents.get_by_role("link", name=config.MENU_WORKBENCH), timeout=5000).click()
-        pa(2)
-    except:
-        pass
+    goto_workbench(page)
     main_kef = page.frame_locator(config.SELECTOR_FRAME_MAIN_KEF)
     try:
         rows = main_kef.locator("table tbody tr")
@@ -275,12 +282,7 @@ def open_task_popup(page, plate):
     """在工作台点指定车牌的链接,返回新 popup
     Returns: 新 popup Page, 或 None
     """
-    contents = page.frame_locator(config.SELECTOR_FRAME_CONTENTS)
-    try:
-        safe(contents.get_by_role("link", name=config.MENU_WORKBENCH), timeout=5000).click()
-        pa(2)
-    except:
-        pass
+    goto_workbench(page)
     main_kef = page.frame_locator(config.SELECTOR_FRAME_MAIN_KEF)
     try:
         links = main_kef.locator("a")
@@ -1188,12 +1190,7 @@ def main():
 
             while True:
                 # === 第一步: 检查工作台是否有未完成的任务(续跑) ===
-                contents = page.frame_locator(config.SELECTOR_FRAME_CONTENTS)
-                try:
-                    safe(contents.get_by_role("link", name=config.MENU_WORKBENCH), timeout=5000).click()
-                    pa(2)
-                except:
-                    pass
+                goto_workbench(page)
 
                 main_kef = page.frame_locator(config.SELECTOR_FRAME_MAIN_KEF)
                 workbench_plates = []  # [(plate, current_node, flow_name), ...]
