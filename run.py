@@ -32,6 +32,21 @@ import time as _time
 RESULTS = []  # [{plate, flow_type, start_time, end_time, status, error}]
 
 
+def safe_input(prompt):
+    """包装 input()，支持 stdin 被 GUI 关闭时优雅退出
+
+    - 正常情况：调内置 input() 等用户回车
+    - stdin 被关闭（GUI 强制停止时）：抛 SystemExit，让 run_main 退出
+    """
+    try:
+        return input(prompt)
+    except (EOFError, ValueError, KeyboardInterrupt):
+        # stdin 被 GUI 关闭 / 用户 Ctrl+C → 查 FORCE_STOP
+        if config.FORCE_STOP:
+            raise SystemExit("用户强制停止")
+        raise
+
+
 def export_results_excel():
     """把处理结果导出为 Excel 报表"""
     if not RESULTS:
@@ -179,7 +194,7 @@ def wait_for_login_and_navigate(page, username="", password="", auto_submit=Fals
                     continue
             if not user_filled:
                 print("  ⚠️ 未找到用户名输入框，请手动登录")
-                input("  >>> 登录完成后按回车键继续... ")
+                safe_input("  >>> 登录完成后按回车键继续... ")
                 return
 
             pa(0.5)
@@ -199,7 +214,7 @@ def wait_for_login_and_navigate(page, username="", password="", auto_submit=Fals
                     continue
             if not pass_filled:
                 print("  ⚠️ 未找到密码输入框，请手动登录")
-                input("  >>> 登录完成后按回车键继续... ")
+                safe_input("  >>> 登录完成后按回车键继续... ")
                 return
 
             pa(0.5)
@@ -220,14 +235,14 @@ def wait_for_login_and_navigate(page, username="", password="", auto_submit=Fals
                 pa(3)
             else:
                 print("  · 账号密码已填入，等待手动点登录...")
-                input("  >>> 登录完成后按回车键继续... ")
+                safe_input("  >>> 登录完成后按回车键继续... ")
         except Exception as e:
             print(f"  ⚠️ 自动登录失败: {e}")
-            input("  >>> 请手动登录后按回车键继续... ")
+            safe_input("  >>> 请手动登录后按回车键继续... ")
     else:
         print("  · 请手动登录")
         print("  · 登录后请确保左侧导航树已展开")
-        input("\n  >>> 登录完成后按回车键继续... ")
+        safe_input("\n  >>> 登录完成后按回车键继续... ")
 
     contents = get_contents(page)
     # 导航树选择器备选(系统偶尔换 ID)
@@ -241,7 +256,7 @@ def wait_for_login_and_navigate(page, username="", password="", auto_submit=Fals
             continue
     if nav_el is None:
         print("\n  ⚠️ 未检测到导航树,请手动展开左侧菜单")
-        input("  >>> 展开到[普货审验]页面后按回车... ")
+        safe_input("  >>> 展开到[普货审验]页面后按回车... ")
     else:
         print("✅ 导航树已就绪")
 
@@ -317,7 +332,7 @@ def _check_workbench_for_task(page, plate):
                             print(f"  → 弹窗已存在(延迟检测)")
                             return True, existing, step_name
                         print(f"  ⚠️ 点击任务但弹窗未出现,手动确认")
-                        input("  >>> 手动点开车牌链接后按回车...")
+                        safe_input("  >>> 手动点开车牌链接后按回车...")
                         existing = _get_existing_popup(page)
                         if existing:
                             return True, existing, step_name
@@ -521,7 +536,7 @@ def _phase1_select_and_create(page, plate, menu_name):
                 continue
     if not _selected:
         print("  ⚠️ 未找到可勾选的 checkbox,请手动勾选后按回车")
-        input(">>> 勾选后按回车继续...")
+        safe_input(">>> 勾选后按回车继续...")
     pa(1)
 
     # 点击"确定"按钮 - 尝试多个 frame 位置 (容错)
@@ -800,7 +815,7 @@ def _wait_popup_with_hint(page, hint="请手动点车牌打开弹窗"):
     print(f"  ⏳ 自动跳转失败, {hint}")
     if link_clicked:
         print(f"  ⏳ 已点车牌 {link_clicked} 但弹窗未出现")
-    input(">>> 按回车继续...")
+    safe_input(">>> 按回车继续...")
     pa(5)  # 多等一会
     popup = _get_existing_popup(page)
     if popup:
@@ -1394,7 +1409,7 @@ def main():
                         pa(2)
                 except Exception as e:
                     print(f"  普货审验自动导航失败: {e}")
-                    input("  >>> 请手动点左侧[普货审验],然后按回车...")
+                    safe_input("  >>> 请手动点左侧[普货审验],然后按回车...")
                 plate = get_next_plate_from_list(page)
                 if not plate:
                     empty_count += 1

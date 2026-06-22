@@ -88,6 +88,10 @@ class App(tk.Tk):
         self.running = False
         self.worker_thread: threading.Thread | None = None
         self.log_queue: queue.Queue = queue.Queue()
+        # 停止信号阶段：0=未触发, 1=温和停已发, 2=强制停已发
+        # 5 秒内连点 2 次 = 温和停升级为强制停
+        self._stop_phase = 0
+        self._stop_phase_time = 0.0
 
         # 构建界面
         self._build_ui()
@@ -567,30 +571,59 @@ class App(tk.Tk):
         self.running = False
         config.CURRENT_PLATE = ""
         config.FORCE_STOP = False
+        self._stop_phase = 0
         self.btn_start.config(state=tk.NORMAL)
         self.btn_stop.config(state=tk.DISABLED)
         self.plate_var.set("已停止")
         self.step_var.set("—")
 
     def _stop(self):
-        """智能停止：有车在跑 → 等跑完；空闲 → 强制停
-        - CURRENT_PLATE 非空 → 设 SINGLE_RUN=True，等当前车跑完自然退出
-        - CURRENT_PLATE 空   → 设 FORCE_STOP=True，主循环下一圈立即 break
+        """智能停止：
+        - 有车在跑且首次按 → 温和停（按钮保持可用）
+        - 有车在跑且 5 秒内再按 → 升级为强制停（关闭 stdin + FORCE_STOP）
+        - 没车在跑 → 直接强制停
         """
+        import time as _t
         if not self.running:
             return
+        now = _t.time()
         current = config.CURRENT_PLATE
-        if current:
-            # 有车在跑 → 温和停止
-            config.SINGLE_RUN = True
-            self.log_queue.put(f"\n⏹ 停止信号已发送，当前车 [{current}] 处理完毕后自动退出...\n")
-            self.plate_var.set(f"停止中({current})...")
-        else:
-            # 没车在跑 → 强制停止
+
+        # 已发过温和停且 5 秒内 → 升级为强制停
+        if self._stop_phase == 1 and (now - self._stop_phase_time) < 5.0 and current:
+            self._stop_phase = 2
             config.FORCE_STOP = True
-            self.log_queue.put("\n⛔ 强制停止信号已发送，主循环下一圈立即退出...\n")
+            config.SINGLE_RUN = False
+            self._close_stdin_to_break_input()
+            self.log_queue.put("\n⛔ 升级为强制停止：主循环下一圈立即退出，卡住的 input() 也会被唤醒\n")
             self.plate_var.set("强制停止中...")
-        self.btn_stop.config(state=tk.DISABLED)
+            self.btn_stop.config(state=tk.DISABLED)
+            return
+
+        if current:
+            # 有车在跑 + 首次按 → 温和停，按钮保持可用，提示可升级
+            config.SINGLE_RUN = True
+            self._stop_phase = 1
+            self._stop_phase_time = now
+            self.log_queue.put(f"\n⏹ 温和停止：当前车 [{current}] 跑完后退出")
+            self.log_queue.put("   ⚡ 5 秒内再按一次停止按钮可强制中断（用于车卡死场景）\n")
+            self.plate_var.set(f"停止中({current})...")
+            # 按钮保持 NORMAL，让用户可以再按一次升级为强制停
+        else:
+            # 没车在跑 → 直接强制停
+            self._stop_phase = 2
+            config.FORCE_STOP = True
+            self._close_stdin_to_break_input()
+            self.log_queue.put("\n⛔ 强制停止：主循环下一圈立即退出\n")
+            self.plate_var.set("强制停止中...")
+            self.btn_stop.config(state=tk.DISABLED)
+
+    def _close_stdin_to_break_input(self):
+        """关闭 stdin 让卡在 input() 的 worker 唤醒抛 EOFError"""
+        try:
+            sys.stdin.close()
+        except Exception:
+            pass
 
     # --------------------------------------------------------
     # 关于 / 关闭
