@@ -315,7 +315,7 @@ def _check_workbench_for_task(page, plate):
     main_kef = get_main_kef(page)
     try:
         # 找表格里的任务行
-        rows = main_kef.locator("table tbody tr")
+        rows = main_kef.locator(config.SELECTOR_TABLE_ROW)
         for r in range(rows.count()):
             cells = rows.nth(r).locator("td")
             for c in range(cells.count()):
@@ -380,7 +380,7 @@ def read_workbench_node(page, plate):
     goto_workbench(page)
     main_kef = get_main_kef(page)
     try:
-        rows = main_kef.locator("table tbody tr")
+        rows = main_kef.locator(config.SELECTOR_TABLE_ROW)
         for r in range(rows.count()):
             cells = rows.nth(r).locator("td")
             row_texts = [cells.nth(j).text_content().strip() for j in range(cells.count())]
@@ -1239,7 +1239,7 @@ def get_next_plate_from_list(page):
     main_kef = get_main_kef(page)
     # 扫描所有 table (可能分多页)
     try:
-        tables = main_kef.locator("table")
+        tables = main_kef.locator(config.SELECTOR_TABLE)
         for t_idx in range(tables.count()):
             rows = tables.nth(t_idx).locator("tbody tr")
             for r in range(rows.count()):
@@ -1328,7 +1328,7 @@ def main():
                 main_kef = get_main_kef(page)
                 workbench_plates = []  # [(plate, current_node, flow_name), ...]
                 try:
-                    rows = main_kef.locator("table tbody tr")
+                    rows = main_kef.locator(config.SELECTOR_TABLE_ROW)
                     for r in range(rows.count()):
                         cells = rows.nth(r).locator("td")
                         row_texts = [cells.nth(j).text_content().strip() for j in range(cells.count())]

@@ -116,6 +116,14 @@ SELECTOR_FRAME_FIND_FRAME_KF = "frame[name='FindFrame_kf']"
 SELECTOR_IFRAME_I_FRAME_USER = "iframe[name='iFrame_user']"
 SELECTOR_TREE_EXPAND = "#webfx-tree-object-apollo-4-plus"
 
+# 表格选择器（工作台 / 年审列表共用）
+SELECTOR_TABLE = "table"
+SELECTOR_TABLE_ROW = "table tbody tr"
+
+# 年度审验链接选择器模板（填入变体文字）
+# 示例: f"a:has-text('{config.YEAR_CHECK_TEXTS[0]}')"
+SELECTOR_A_YEAR_CHECK = "a:has-text('{text}')"
+
 # 导航树展开备选(系统偶尔换 ID)
 NAV_TREE_SELECTORS = [
     "#webfx-tree-object-apollo-4-plus",
