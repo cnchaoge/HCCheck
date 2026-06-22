@@ -63,35 +63,6 @@ def safe_input(prompt):
         raise
 
 
-def _close_with_timeout(close_func, timeout=5):
-    """限时关闭浏览器 context/browser
-
-    Playwright 的 close 必须在主线程调用（内部用 greenlet 模拟同步 API），
-    如果用 daemon thread 调，close 完成时回调要切回主线程会报 greenlet.error。
-
-    方案：主线程同步调 close，另起 daemon 线程等超时；超时则强制退出进程。
-    超时不会报 greenlet error，因为是主进程退出不是 daemon thread 调 close。
-    """
-    import threading as _th
-    import os as _os
-    done = _th.Event()
-
-    def _killer():
-        # 超时还没关掉 → 强制退出整个进程，避免卡死
-        if not done.wait(timeout):
-            _os._exit(0)
-
-    _th.Thread(target=_killer, daemon=True).start()
-
-    try:
-        close_func()
-    except BaseException:
-        # BaseException 能捕获 greenlet.error（BaseException 的子类，不是 Exception）
-        pass
-    finally:
-        done.set()
-
-
 def export_results_excel():
     """把处理结果导出为 Excel 报表"""
     if not RESULTS:
@@ -1527,17 +1498,12 @@ def main():
             print(f"\n  💥 系统异常: {e}")
             screenshot_on_error(page, "fatal")
         finally:
-            # 强制停模式下限时关闭，避免卡住导致 GUI 按钮状态不更新
-            close_timeout = 3 if config.FORCE_STOP else 15
+            # 不显式关闭 context/browser — Playwright close 经常 hang，会阻塞主线程
+            # 让 Python 进程退出时由 atexit + gc 自动清理（可能遗留 chromium 进程）
             try:
                 for pg in context.pages:
                     try: pg.once("dialog", lambda d: d.accept())
                     except: pass
-                _close_with_timeout(context.close, close_timeout)
-            except:
-                pass
-            try:
-                _close_with_timeout(browser.close, close_timeout)
             except:
                 pass
             # 导出处理结果
