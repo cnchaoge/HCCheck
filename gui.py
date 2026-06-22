@@ -547,16 +547,21 @@ class App(tk.Tk):
         if self.running:
             return
 
-        # 弹出登录对话框
-        username, password, ok = self._show_login_dialog()
-        if not ok:
-            return
-        # 临时覆盖 config 的账号密码（本次启动用）
-        config.LOGIN_USERNAME = username
-        config.LOGIN_PASSWORD = password
-        config.LOGIN_AUTO_SUBMIT = True
-
+        # 先把设置页的值应用到 config
         self._apply_config()
+
+        # 如果设置页没填账号密码，才弹登录框让用户填（备用）
+        if not config.LOGIN_USERNAME or not config.LOGIN_PASSWORD:
+            username, password, ok = self._show_login_dialog()
+            if not ok:
+                return
+            # 登录框填了，同步回设置页 + config
+            config.LOGIN_USERNAME = username
+            config.LOGIN_PASSWORD = password
+            config.LOGIN_AUTO_SUBMIT = True
+            self.username_var.set(username)
+            self.password_var.set(password)
+
         # 重置停止控制状态（防止上一次未清理的信号影响本次启动）
         config.CURRENT_PLATE = ""
         config.FORCE_STOP = False
