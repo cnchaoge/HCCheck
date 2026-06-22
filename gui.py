@@ -88,6 +88,9 @@ class App(tk.Tk):
         self.running = False
         self.worker_thread: threading.Thread | None = None
         self.log_queue: queue.Queue = queue.Queue()
+        # 状态栏同步队列（run.py push_status() 推消息，_consume_queues 消费）
+        self.status_queue: queue.Queue = queue.Queue()
+        config.STATUS_QUEUE = self.status_queue
         # 停止信号阶段：0=未触发, 1=温和停已发, 2=强制停已发
         # 5 秒内连点 2 次 = 温和停升级为强制停
         self._stop_phase = 0
@@ -97,7 +100,7 @@ class App(tk.Tk):
         self._build_ui()
 
         # 启动日志消费循环
-        self._consume_log_queue()
+        self._consume_queues()
 
         # 窗口关闭处理
         self.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -481,10 +484,12 @@ class App(tk.Tk):
                 f.write(content)
             messagebox.showinfo("导出成功", f"日志已保存到:\n{path}")
 
-    def _consume_log_queue(self):
-        """从队列中取出日志并写入文本框（线程安全）
-        顺便处理特殊信号：__WORKER_DONE__ 表示 worker thread 已退出
+    def _consume_queues(self):
+        """从两个队列中取出消息：log_queue（日志）和 status_queue（状态栏）
+        - log_queue: 接收 worker 的 print 输出，特殊信号 __WORKER_DONE__
+        - status_queue: 接收 run.py push_status() 推的状态更新
         """
+        # 日志队列
         try:
             while True:
                 text = self.log_queue.get_nowait()
@@ -494,7 +499,28 @@ class App(tk.Tk):
                 self._append_log(text)
         except queue.Empty:
             pass
-        self.after(100, self._consume_log_queue)
+        # 状态队列
+        try:
+            while True:
+                status = self.status_queue.get_nowait()
+                self._apply_status(status)
+        except queue.Empty:
+            pass
+        self.after(100, self._consume_queues)
+
+    def _apply_status(self, status: dict):
+        """根据 push_status() 推送的消息更新状态栏
+        任一字段为 None 表示不更新该项
+        """
+        plate = status.get("plate")
+        if plate is not None:
+            self.plate_var.set(plate or "—")
+        step = status.get("step")
+        if step is not None:
+            self.step_var.set(step or "—")
+        done = status.get("done")
+        if done is not None:
+            self.done_var.set(str(done))
 
     # --------------------------------------------------------
     # 启动 / 停止

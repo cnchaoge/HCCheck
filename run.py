@@ -32,6 +32,22 @@ import time as _time
 RESULTS = []  # [{plate, flow_type, start_time, end_time, status, error}]
 
 
+def push_status(plate=None, step=None, done=None):
+    """更新 GUI 状态栏（plate_var / step_var / done_var）
+    任一参数传 None 表示该项不更新
+    """
+    if config.STATUS_QUEUE is None:
+        return
+    try:
+        config.STATUS_QUEUE.put({
+            "plate": plate,
+            "step": step,
+            "done": done,
+        })
+    except Exception:
+        pass
+
+
 def safe_input(prompt):
     """包装 input()，支持 stdin 被 GUI 关闭时优雅退出
 
@@ -1082,6 +1098,7 @@ def process_unmarked(page, plate, run_from_step=None, processed=0):
         print(f"  🚗 车牌: {plate}")
         print(f"  📋 当前步骤: {step_name} (第 {processed} 辆车)")
         print(f"  ⏳ 正在处理中...")
+        push_status(step=step_name)
         print(f"  ════════════════════════════════════")
         step_handlers[current_node](popup)
 
@@ -1148,6 +1165,7 @@ def process_marked(page, plate, run_from_step=None, processed=0):
         print(f"\n  ═══════════════════")
         print(f"  📋 popup: {step_names.get(current_node, current_node)}")
         print(f"  ═══════════════════")
+        push_status(step=step_names.get(current_node, current_node))
         step_handlers[current_node](popup)
 
         # 完成后系统会自动关闭 popup
@@ -1218,11 +1236,13 @@ def _phase2_finish(popup, page):
 def dispatch(page, plate, run_from_step=None, processed=0):
     # 通知 GUI：当前正在处理 plate
     config.CURRENT_PLATE = plate
+    push_status(plate=plate, step="启动中", done=processed)
     try:
         if "挂" in plate:
             process_marked(page, plate, run_from_step, processed)
         else:
             process_unmarked(page, plate, run_from_step, processed)
+        push_status(step="✅ 完成", done=processed)
     finally:
         # 无论成功/异常,都清空状态,让 GUI 知道进入空闲
         config.CURRENT_PLATE = ""
@@ -1375,6 +1395,7 @@ def main():
                         print(f"\n🔄 续跑: {plate} ({flow_name} | {current_node})")
 
                         processed += 1
+                        push_status(plate=plate, done=processed)
                         print(f"\n{'='*55}")
                         print(f"  第 {processed} 辆: {plate}")
                         try:
@@ -1449,6 +1470,7 @@ def main():
                     continue
 
                 processed += 1
+                push_status(plate=plate, done=processed)
                 print(f"\n{'='*55}")
                 print(f"  第 {processed} 辆: {plate}")
                 try:

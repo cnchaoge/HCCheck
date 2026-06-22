@@ -22,6 +22,12 @@ SLOW = 0.5               # pa() 默认 sleep 秒
 CURRENT_PLATE = ""       # 当前正在处理的车牌（空 = 空闲）
 FORCE_STOP = False       # 强制停止标志（True 时主循环下一圈立即 break）
 
+# ========= 状态栏同步（GUI 启动时赋值） =========
+# run.py 调 push_status() 推状态消息到这个 queue
+# GUI 主线程消费后更新 plate_var / step_var / done_var
+# 传 None 表示该项不更新
+STATUS_QUEUE = None
+
 # ========= 站点 =========
 URL = "https://221.195.18.1:8181/yg/loginAction.do"
 
