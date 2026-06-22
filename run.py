@@ -666,7 +666,8 @@ def _click_expand_freight_manage(contents):
     # 检查是否已展开 (看普货审验是否可见)
     try:
         contents.get_by_text(config.MENU_NORMAL_REVIEW).first.wait_for(state="visible", timeout=1000)
-        print(f"  ✅ 菜单已展开")
+        if config.DEBUG:
+            print(f"  ✅ 菜单已展开")
         return True
     except:
         pass
@@ -733,21 +734,24 @@ def _click_normal_review_link(contents):
     # 策略1: role 定位
     try:
         safe(contents.get_by_role("link", name=config.MENU_NORMAL_REVIEW), timeout=5000).click()
-        print(f"  ✓ 点普货审验 (role)")
+        if config.DEBUG:
+            print(f"  ✓ 点普货审验 (role)")
         return True
     except:
         pass
     # 策略2: 文本定位
     try:
         contents.get_by_text(config.MENU_NORMAL_REVIEW).first.click()
-        print(f"  ✓ 点普货审验 (text)")
+        if config.DEBUG:
+            print(f"  ✓ 点普货审验 (text)")
         return True
     except:
         pass
     # 策略3: JS 强制点击
     try:
         contents.locator(f'a:has-text("{config.MENU_NORMAL_REVIEW}")').first.evaluate("el => el.click()")
-        print(f"  ✓ 点普货审验 (JS)")
+        if config.DEBUG:
+            print(f"  ✓ 点普货审验 (JS)")
         return True
     except:
         pass
@@ -1264,12 +1268,13 @@ def get_next_plate_from_list(page):
                 return m
     except Exception as e:
         print(f"  ⚠️ 全文搜索车牌失败: {e}")
-    # 调试: 打印 main_kef 内容
-    try:
-        content = main_kef.locator("body").text_content(timeout=3000)[:300]
-        print(f"  🔍 main_kef内容(前300字): {content}")
-    except:
-        pass
+    # 调试: 打印 main_kef 内容（仅 DEBUG 模式）
+    if config.DEBUG:
+        try:
+            content = main_kef.locator("body").text_content(timeout=3000)[:300]
+            print(f"  🔍 main_kef内容(前300字): {content}")
+        except:
+            pass
     return None
 
 # ========= 主流程 =========
@@ -1308,7 +1313,6 @@ def main():
             print("  开始批量审验处理")
             print("=" * 55)
 
-            empty_count = 0
             processed = 0
             failures = {}
 
@@ -1424,7 +1428,8 @@ def main():
 
                     # 验证 main_kef 是否真的切到了普货审验列表
                     if not _verify_in_normal_review(page):
-                        print(f"  ⚠️ 验证未切到普货审验, 重试点击...")
+                        if config.DEBUG:
+                            print(f"  ⚠️ 验证未切到普货审验, 重试点击...")
                         # 再试一次
                         _click_normal_review_link(contents)
                         pa(2)
@@ -1433,14 +1438,9 @@ def main():
                     safe_input("  >>> 请手动点左侧[普货审验],然后按回车...")
                 plate = get_next_plate_from_list(page)
                 if not plate:
-                    empty_count += 1
-                    if empty_count >= 2:
-                        print("\n  📋 年审列表和工作台均无待办车辆,流程结束 ✅")
-                        break
-                    print(f"  ⏳ 未获取到车牌,第{empty_count}次重试...")
-                    pa(2)
-                    continue
-                empty_count = 0
+                    # 拿不到车牌 → 直接结束（不重试，避免重复调试输出）
+                    print("\n  📋 年审列表和工作台均无待办车辆,流程结束 ✅")
+                    break
 
                 if plate in SKIP_PLATES:
                     print(f"  ⏭ 跳过 {plate} (已被拉黑)")
