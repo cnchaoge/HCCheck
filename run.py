@@ -47,6 +47,28 @@ def safe_input(prompt):
         raise
 
 
+def _close_with_timeout(close_func, timeout=3):
+    """限时关闭浏览器 context/browser，避免卡住导致 GUI 按钮状态不更新
+
+    返回 True = 正常关闭；False = 超时未关闭（daemon thread 接管，会随进程退出）
+    """
+    import threading as _th
+    done = _th.Event()
+
+    def _run():
+        try:
+            close_func()
+        except Exception:
+            pass
+        finally:
+            done.set()
+
+    t = _th.Thread(target=_run, daemon=True)
+    t.start()
+    finished = done.wait(timeout)
+    return finished
+
+
 def export_results_excel():
     """把处理结果导出为 Excel 报表"""
     if not RESULTS:
@@ -1476,15 +1498,19 @@ def main():
             print(f"\n  💥 系统异常: {e}")
             screenshot_on_error(page, "fatal")
         finally:
+            # 强制停模式下限时关闭，避免卡住导致 GUI 按钮状态不更新
+            close_timeout = 3 if config.FORCE_STOP else 15
             try:
                 for pg in context.pages:
                     try: pg.once("dialog", lambda d: d.accept())
                     except: pass
-                context.close()
+                if not _close_with_timeout(context.close, close_timeout):
+                    print(f"  ⚠️ context.close 超时({close_timeout}s)，交由 daemon 线程后台清理")
             except:
                 pass
             try:
-                browser.close()
+                if not _close_with_timeout(browser.close, close_timeout):
+                    print(f"  ⚠️ browser.close 超时({close_timeout}s)，交由 daemon 线程后台清理")
             except:
                 pass
             # 导出处理结果
