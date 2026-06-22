@@ -15,6 +15,17 @@ MAX_FAIL = 3             # 同一辆车失败 N 次进黑名单
 HEADLESS = False         # True: 无头模式(不推荐,看不到弹窗)
 SLOW = 0.5               # pa() 默认 sleep 秒
 
+# ========= 操作间隔常量（pa() 参数统一名，集中可调） =========
+PA_AFTER_CLICK = 2       # 点击菜单/按钮后等待（最常用）
+PA_AFTER_MENU = 1        # 菜单点击后等待
+PA_AFTER_QUERY = 1.5     # 查询后等待
+PA_AFTER_SUBMIT = 2      # 提交后等待
+PA_AFTER_POPUP = 3       # 弹窗打开后等待
+PA_AFTER_NAV = 3         # 页面导航后等待
+PA_SHORT = 0.5           # 短间隔
+PA_VERY_SHORT = 0.15     # 输入框内操作
+PA_LONG = 5              # 长间隔
+
 # ========= 停止控制（GUI ↔ 主循环通信） =========
 # GUI 按"停止"时：
 #   CURRENT_PLATE 非空 → 设 SINGLE_RUN=True → 当前车跑完后温和退出
