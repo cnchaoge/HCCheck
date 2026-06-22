@@ -22,7 +22,8 @@ from popups import (
     handle_vehicle_annual,
     handle_archive,
 )
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, Page
+from typing import Optional
 
 # ========= 黑名单(失败 N 次的车牌不再自动重试) =========
 SKIP_PLATES = set()
@@ -154,7 +155,7 @@ def get_contents(page):
 
 
 # ========= 登录 + 导航 =========
-def wait_for_login_and_navigate(page, username="", password="", auto_submit=False):
+def wait_for_login_and_navigate(page: Page, username: str = "", password: str = "", auto_submit: bool = False):
     page.goto(config.URL, wait_until="domcontentloaded")
     pa(1)
 
@@ -1021,7 +1022,7 @@ def _detect_popup_step(popup, page=None):
     return "unknown"
 
 # ========= 两条流程 =========
-def process_unmarked(page, plate, run_from_step=None, processed=0):
+def process_unmarked(page: Page, plate: str, run_from_step: Optional[str] = None, processed: int = 0):
     """不带挂:popup1 车辆检测 → popup2 技术 → popup3 业务 → popup4 年审 → popup5 归档
     工作台节点驱动: 每完成一个 popup 后重读工作台,决定下一步
     """
@@ -1093,7 +1094,7 @@ def process_unmarked(page, plate, run_from_step=None, processed=0):
 
     print(f"  ✅ {plate} 流程结束")
 
-def process_marked(page, plate, run_from_step=None, processed=0):
+def process_marked(page: Page, plate: str, run_from_step: Optional[str] = None, processed: int = 0):
     """带挂流程: 业务岗位审核 → 车辆年审 → 归档 (3 个 popup)
     工作台节点驱动: 每完成一个 popup 后重读工作台,决定下一步
     """
@@ -1215,7 +1216,7 @@ def _phase2_finish(popup, page):
         pass
     pa(2)
 
-def dispatch(page, plate, run_from_step=None, processed=0):
+def dispatch(page: Page, plate: str, run_from_step: Optional[str] = None, processed: int = 0):
     # 通知 GUI：当前正在处理 plate
     config.CURRENT_PLATE = plate
     push_status(plate=plate, step="启动中", done=processed)
@@ -1230,7 +1231,7 @@ def dispatch(page, plate, run_from_step=None, processed=0):
         config.CURRENT_PLATE = ""
 
 # ========= 从列表拿车牌 =========
-def get_next_plate_from_list(page):
+def get_next_plate_from_list(page: Page) -> Optional[str]:
     """从年审列表拿第一个无流水号的车牌(FIFO),跳过黑名单
     扫描多个 table (年审列表可能分多个表格)
     Columns: Seq|Radio|ApprovalNo|AppNo|Name|Date|Phone|Plate|Color|VIN|Source
@@ -1288,7 +1289,7 @@ def _filter_page_error(err):
     print(f"  ⚠️ 页面错误: {msg}")
 
 
-def main():
+def main() -> None:
     with sync_playwright() as p:
         browser = p.chromium.launch(channel="chrome", headless=config.HEADLESS)
         context = browser.new_context(viewport={"width": 1600, "height": 900})
