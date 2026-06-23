@@ -4,6 +4,13 @@
 
 不带挂流程:popup2 = 技术岗位审核(带打印)
 带挂流程:popup2 = 业务岗位审核(跳过打印,直接提交) — 用 p3 的 handler
+
+修复历史:
+- 2026-06-23: 强化打印预览关闭
+  - 追踪 pages_before 找出新开的 page 关闭
+  - 加 CLodop / C-Lodop / caosoft 关键词
+  - JS 调用 LODOP.PREVIEW() 取消 + SetPrintMode 关闭
+  - 按 Escape 多次 + Ctrl+W
 """
 import config
 from utils import safe, pa, step
@@ -28,67 +35,109 @@ PRINT_LINK_FRAME_SELECTORS = [
 # 打印链接的 onclick JS 函数名
 PRINT_ONCLICK_KEY = "doPrintDetect"
 
+# Lodop 预览特征关键词 (URL 或 title)
+LODOP_KEYWORDS = [
+    "lodop",
+    "clodop",
+    "c-lodop",
+    "caosoft",
+    "print_preview",
+    "printpreview",
+    "print-preview",
+    "preview",
+]
 
-def _close_print_preview(context):
-    """关闭 Lodop 打印预览
-    Lodop 预览可能是:
-    1. 独立的新窗口/标签页 - 遍历 context.pages 关闭
+
+def _close_print_preview(context, pages_before):
+    """关闭 Lodop 打印预览 - 强化版
+
+    Args:
+        context: Playwright BrowserContext
+        pages_before: 点击打印前的 page 列表(用于检测新开的 tab)
+
+    Lodop 预览可能是 4 种形式:
+    1. 独立的新窗口/标签页 (window.open) - 找新 page 关闭
     2. 嵌入在业务弹窗里的 HTML 元素 - 用 JS 查找 LODOP 对象关闭
     3. 嵌入在业务弹窗里的隐藏 iframe - 遍历所有 frame 关闭
+    4. Chrome 原生 print dialog (window.print) - 按 Escape
     """
     closed = 0
 
-    # 策略1: 遍历 context.pages 找独立窗口
-    for p in context.pages:
+    # 策略1: 检测点击后新开的 page (最可靠)
+    new_pages = [p for p in context.pages if p not in pages_before]
+    for p in new_pages:
         try:
-            url = (p.url or "").lower()
-            title = ""
+            print(f"  🔍 检测到新 page: url={p.url[:50]}, title={p.title()[:30] if p.title() else ''}")
+            # 先点关闭按钮(如果有)
             try:
-                title = p.title() or ""
+                p.get_by_role("button", name="关闭").first.click(timeout=2000)
+                print(f"  ✓ 点击新 page 关闭按钮")
             except:
                 pass
-            # Lodop 预览窗口特征
-            is_preview = (
-                "lodop" in url or
-                "print_preview" in url or
-                "printpreview" in url or
-                "打印预览" in title or
-                "lodop" in title.lower() or
-                "caosoft" in url
-            )
-            if is_preview:
-                try:
-                    p.get_by_role("button", name="关闭").first.click()
-                    print(f"  ✓ 关闭按钮: {title[:30]}")
-                except:
-                    pass
-                try:
-                    p.close()
-                    closed += 1
-                    print(f"  ✓ 关闭打印预览窗口")
-                except:
-                    pass
+            # 直接关 tab
+            try:
+                p.close()
+                closed += 1
+                print(f"  ✓ 关闭新 page")
+            except Exception as e:
+                print(f"  关闭新 page 失败: {e}")
         except:
             continue
 
-    # 策略2: 在每个业务页面里查找 LODOP 预览并关闭
+    # 策略2: 遍历所有 pages 找 Lodop 特征
     if closed == 0:
         for p in context.pages:
             try:
-                # 尝试 JS 调用 LODOP 关闭预览, 并移除 lodop 预览遮罩
+                url = (p.url or "").lower()
+                title = ""
+                try:
+                    title = (p.title() or "").lower()
+                except:
+                    pass
+
+                is_preview = any(kw in url or kw in title for kw in LODOP_KEYWORDS)
+                # 特殊情况: about:blank + 标题含 lodop/打印
+                if not is_preview and url == "about:blank":
+                    is_preview = any(kw in title for kw in ["lodop", "打印", "preview"])
+
+                if is_preview:
+                    try:
+                        p.get_by_role("button", name="关闭").first.click(timeout=2000)
+                    except:
+                        pass
+                    try:
+                        p.close()
+                        closed += 1
+                        print(f"  ✓ 关闭 Lodop 预览 (按特征匹配)")
+                    except:
+                        pass
+            except:
+                continue
+
+    # 策略3: JS 移除 Lodop 元素 (iframe / 遮罩)
+    if closed == 0:
+        for p in context.pages:
+            try:
                 result = p.evaluate("""() => {
                     let count = 0;
                     try {
-                        // 查找并移除 lodop 预览容器
+                        // 1. 移除 Lodop 相关 iframe
+                        const iframes = document.querySelectorAll('iframe');
+                        for (const f of iframes) {
+                            const src = (f.src || '').toLowerCase();
+                            const id = (f.id || '').toLowerCase();
+                            if (src.includes('lodop') || src.includes('clodop') || src.includes('caosoft') ||
+                                src.includes('preview') || id.includes('lodop') || id.includes('preview')) {
+                                try { f.remove(); count++; } catch(err) {}
+                            }
+                        }
+                        // 2. 移除 Lodop 弹窗 div / 遮罩
                         const selectors = [
-                            '[id*="LODOP"]',
-                            '[id*="lodop"]',
-                            '[class*="LODOP"]',
-                            '[class*="lodop"]',
-                            '[id*="preview"]',
-                            '[class*="preview"]',
-                            '.ui-popup',
-                            '.ui-popup-backdrop',
+                            '[id*="LODOP"]', '[id*="lodop"]', '[id*="Lodop"]',
+                            '[class*="LODOP"]', '[class*="lodop"]', '[class*="Lodop"]',
+                            '[id*="preview"]', '[class*="preview"]',
+                            '.ui-popup', '.ui-popup-backdrop',
+                            'div[style*="position: absolute"][style*="z-index"]',
                         ];
                         for (const sel of selectors) {
                             const els = document.querySelectorAll(sel);
@@ -96,22 +145,13 @@ def _close_print_preview(context):
                                 try { e.remove(); count++; } catch(err) {}
                             }
                         }
-                        // 移除所有 iframe (包括 lodop 预览的)
-                        const iframes = document.querySelectorAll('iframe');
-                        for (const f of iframes) {
-                            const src = (f.src || '').toLowerCase();
-                            if (src.includes('lodop') || src.includes('preview') || src.includes('print')) {
-                                try { f.remove(); count++; } catch(err) {}
-                            }
-                        }
-                        // 遍历所有 frame 移除 lodop 元素
+                        // 3. 遍历所有 frame 移除 lodop 元素
                         const frames = document.querySelectorAll('iframe, frame');
                         for (const fr of frames) {
                             try {
                                 const doc = fr.contentDocument || fr.contentWindow.document;
                                 if (doc) {
-                                    const subSelectors = ['[id*="LODOP"]', '[class*="LODOP"]', '.ui-popup', '.ui-popup-backdrop'];
-                                    for (const sel of subSelectors) {
+                                    for (const sel of selectors) {
                                         const els = doc.querySelectorAll(sel);
                                         for (const e of els) {
                                             try { e.remove(); count++; } catch(err) {}
@@ -119,6 +159,30 @@ def _close_print_preview(context):
                                     }
                                 }
                             } catch(err) {}
+                        }
+                        // 4. 调用 LODOP API 关闭预览
+                        if (window.LODOP) {
+                            try {
+                                if (typeof window.LODOP.PREVIEW === 'function') {
+                                    window.LODOP.PREVIEW(false);
+                                    count++;
+                                }
+                                if (typeof window.LODOP.SetPrintMode === 'function') {
+                                    try { window.LODOP.SetPrintMode('PREVIEW_IN_BROWSER', false); } catch(e) {}
+                                }
+                                if (typeof window.LODOP.On_Return !== 'undefined') {
+                                    window.LODOP.On_Return = null;
+                                }
+                            } catch(e) {}
+                        }
+                        if (window.getLodop) {
+                            try {
+                                const lodop = window.getLodop();
+                                if (lodop && typeof lodop.PREVIEW === 'function') {
+                                    lodop.PREVIEW(false);
+                                    count++;
+                                }
+                            } catch(e) {}
                         }
                     } catch(e) {}
                     return count;
@@ -130,16 +194,31 @@ def _close_print_preview(context):
             except:
                 continue
 
-    # 策略3: 按 Escape 键关闭可能还在的弹窗
+    # 策略4: 键盘快捷键 (Escape / Ctrl+W)
     if closed == 0:
         for p in context.pages:
             try:
                 p.keyboard.press("Escape")
+                pa(0.3)
+                p.keyboard.press("Escape")
+                pa(0.3)
+                # Ctrl+W 关 tab
+                p.keyboard.press("Control+w")
+                pa(0.3)
+            except:
+                pass
+        # 再 check 一遍 pages 数量
+        new_after_kb = [p for p in context.pages if p not in pages_before]
+        for p in new_after_kb:
+            try:
+                p.close()
+                closed += 1
             except:
                 pass
 
     if closed == 0:
         print(f"  ⚠️ 未找到可关闭的打印预览")
+    return closed
 
 
 def handle(popup, context, main_page, plate):
@@ -152,12 +231,16 @@ def handle(popup, context, main_page, plate):
     # 先点车牌链接(让打印链接显示)
     try:
         plate_link = wf.get_by_role("link", name=plate)
-        safe(plate_link, timeout=3000).click()
-        print("  ✓ 点击车牌链接")
-        pa(1)
+        if plate_link.count() > 0:
+            plate_link.first.click()
+            print("  ✓ 点击车牌链接")
+            pa(1)
     except:
         # 没有车牌链接就跳过
         pass
+
+    # 记录点击打印前的 pages (用于检测新开 tab)
+    pages_before = list(context.pages)
 
     # 4 种策略找打印链接
     if not _click_print_link_v1(wf, popup):
@@ -166,25 +249,28 @@ def handle(popup, context, main_page, plate):
                 # 策略4: 人工兜底
                 print("  ⚠️ 自动点击打印链接失败")
                 print("  👆 请手动点击 [打印综合性能检测告知单] 后按回车")
-                input(">>> 点完后按回车继续...")
+                try:
+                    input(">>> 点完后按回车继续...")
+                except (ValueError, EOFError, OSError):
+                    print("  ⚠️ stdin 不可用,跳过")
 
     # 关闭 Lodop 打印预览 (可能是新窗口/标签页)
     pa(2)
-    _close_print_preview(context)
-    pa(2)
+    _close_print_preview(context, pages_before)
+    pa(1)
     step("技术岗位审核: 打印完成,准备提交")
 
     # 提交 + 选下一处理人
     try:
-        safe(wf.get_by_role("button", name=config.BTN_SUBMIT), timeout=3000).click()
+        safe(wf.get_by_role("button", name=config.BTN_SUBMIT), timeout=5000).click()
         pa(2)
         do_dialog(
             popup,
             action_type=config.ACTION_SUBMIT_TECH_REVIEW,
             category=config.CATEGORY_ROLE,
         )
-    except:
-        print("  ⚠️ 提交按钮找不到")
+    except Exception as e:
+        print(f"  ⚠️ 提交按钮找不到 ({e})")
     step("技术岗位审核: 完成 ✅")
 
 

@@ -1,7 +1,14 @@
 """popup4: 车辆年审(不带挂/带挂流程都用到)
 
-操作:点"年度审验"链接 → 等子页面加载 → 提交 → 选下一处理人
+操作:点车牌链接(让年度审验链接显示) → 3 种策略找"年度审验" → 等子页面加载 → 提交 → 选下一处理人
 带挂流程的 popup4(年审2)category 是"发起人"而不是"角色"。
+
+修复历史:
+- 2026-06-23: 加 wait_for + retry + 异常处理 input
+  - 仿 popup2 先点车牌链接(让年度审验链接显示)
+  - 每个策略等元素 visible 后再点
+  - 子页面加载等待加长到 10s
+  - input() 包 try/except 防止 stdin 关闭崩
 """
 import config
 from utils import safe, pa, step
@@ -16,31 +23,34 @@ def handle(popup, context, plate,
     print("  ═══════════════════")
     step("车辆年审: 准备点击年度审验")
 
-    # 优先用 popup.frames 遍历找年度审验
-    clicked = _click_year_check_via_frames(popup)
-    if not clicked:
-        clicked = _click_year_check_via_text_in_frames(popup)
-    if not clicked:
-        # fallback: 用 frame_locator 链
-        clicked = _click_year_check_via_frame_locator(popup)
+    # 🆕 先点车牌链接(让"年度审验"链接显示 — 跟 popup2 一样的 UI 模式)
+    _click_plate_link(popup, plate)
+
+    # 用 3 个策略找"年度审验"链接
+    clicked = _click_year_check(popup, max_retry=2)
 
     if not clicked:
         print("  ⚠️ 找不到年度审验链接,手动点击后按回车")
-        input("  >>> 点完按回车继续...")
-    # 等子页面加载 (年度审验子页面加载后,会显示“检测结果”或其他新内容)
-    pa(3)
-    print(f"  调试 - 等子页面加载...")
-    _wait_for_year_check_subpage(popup)
+        try:
+            input("  >>> 点完按回车继续...")
+        except (ValueError, EOFError, OSError):
+            print("  ⚠️ stdin 不可用 (I/O closed),跳过本步骤")
+            # 仍然尝试提交,让流程尽量往下走
+            pass
+
+    # 等子页面加载 (强化: 10s 等待 + 关键词检测)
+    pa(2)
+    _wait_for_year_check_subpage(popup, timeout=10)
     pa(2)
 
     # 提交
     try:
-        # 优先 popup.frames 找提交
         submit_clicked = False
         for f in popup.frames:
             try:
                 btn = f.get_by_role("button", name=config.BTN_SUBMIT)
                 if btn.count() > 0:
+                    btn.first.wait_for(state="visible", timeout=5000)
                     btn.first.click(force=True)
                     submit_clicked = True
                     print(f"  ✓ frame[{f.name}] 点击提交")
@@ -49,50 +59,91 @@ def handle(popup, context, plate,
                 continue
         if not submit_clicked:
             wf = popup.frame_locator(config.SELECTOR_FRAME_WORKFLOW_MAIN)
-            safe(wf.get_by_role("button", name=config.BTN_SUBMIT), timeout=3000).click()
+            safe(wf.get_by_role("button", name=config.BTN_SUBMIT), timeout=5000).click()
             print("  ✓ 点击提交")
-    except:
-        print("  ⚠️ 提交按钮找不到")
+    except Exception as e:
+        print(f"  ⚠️ 提交按钮找不到 ({e})")
     pa(2)
     do_dialog(popup, action_type=action_type, category=category)
     step("车辆年审: 完成 ✅")
 
 
-def _wait_for_year_check_subpage(popup):
+def _click_plate_link(popup, plate):
+    """点车牌链接(让"年度审验"链接显示,跟 popup2 一样)"""
+    try:
+        wf = popup.frame_locator(config.SELECTOR_FRAME_WORKFLOW_MAIN)
+        plate_link = wf.get_by_role("link", name=plate)
+        if plate_link.count() > 0:
+            plate_link.first.click()
+            print("  ✓ 点击车牌链接")
+            pa(1.5)
+    except:
+        # 没有车牌链接就跳过(不影响主流程)
+        pass
+
+
+def _click_year_check(popup, max_retry=2):
+    """点"年度审验"链接,带重试和显式等待"""
+    for attempt in range(max_retry):
+        # 3 个策略依次尝试
+        clicked = _click_year_check_via_frames(popup)
+        if not clicked:
+            clicked = _click_year_check_via_text_in_frames(popup)
+        if not clicked:
+            clicked = _click_year_check_via_frame_locator(popup)
+
+        if clicked:
+            return True
+
+        # 没点到,等一会儿再试
+        if attempt < max_retry - 1:
+            print(f"  调试 - 第 {attempt + 1} 次未找到,等 3 秒重试...")
+            pa(3)
+
+    return False
+
+
+def _wait_for_year_check_subpage(popup, timeout=10):
     """等待年度审验子页面加载
-    策略: 轮询 _workflow_main frame, 看是否出现“检测”或类似新内容 (区别于初始页)
+    强化: 等 body 文本出现检测关键词,默认 10s 超时
     """
     try:
         wf_frames = [f for f in popup.frames if f.name == "_workflow_main"]
         if not wf_frames:
-            print(f"  调试 - 未找到 _workflow_main frame")
+            # 退化: 找 _Iframe_content (link 所在 frame)
+            for f in popup.frames:
+                if f.name == "_Iframe_content":
+                    wf_frames = [f]
+                    break
+        if not wf_frames:
+            print(f"  调试 - 未找到 _workflow_main / _Iframe_content frame")
             return False
         wf = wf_frames[0]
-        # 轮询 5 次,每次 1 秒
-        for i in range(5):
+
+        # 轮询 N 次,每次 1 秒
+        for i in range(timeout):
             try:
                 text = wf.locator("body").text_content(timeout=2000)
-                # 子页面特征: 出现 "检测结果" / "检测项目" / "结论" 等关键词
-                if any(kw in text for kw in ["检测结果", "检测项目", "检测结论", "不合格项", "综检结果"]):
-                    print(f"  ✓ 年度审验子页面已加载 (attempt={i})")
+                if text and any(kw in text for kw in ["检测结果", "检测项目", "检测结论", "不合格项", "综检结果"]):
+                    print(f"  ✓ 年度审验子页面已加载 (attempt={i + 1})")
                     return True
             except:
                 pass
             pa(1)
-        print(f"  ⚠️ 年度审验子页面加载超时,可能未跳转")
+        print(f"  ⚠️ 年度审验子页面加载超时({timeout}s),可能未跳转")
     except Exception as e:
         print(f"  调试 - wait_for_year_check_subpage 异常: {e}")
     return False
 
 
 def _click_year_check_via_frames(popup):
-    """策略1: 遍历 popup.frames 找 link 角色 + JS click"""
+    """策略1: 遍历 popup.frames 找 link 角色,等可见再点"""
     for f in popup.frames:
         for txt in config.YEAR_CHECK_TEXTS:
             try:
                 link = f.get_by_role("link", name=txt)
                 if link.count() > 0:
-                    # 优先用 JS click (触发浏览器真实跳转)
+                    link.first.wait_for(state="visible", timeout=5000)
                     link.first.evaluate("el => el.click()")
                     print(f"  ✓ frame[{f.name}] JS-click link'{txt}'")
                     return True
@@ -101,6 +152,7 @@ def _click_year_check_via_frames(popup):
             try:
                 link = f.locator(f'a:has-text("{txt}")')
                 if link.count() > 0:
+                    link.first.wait_for(state="visible", timeout=5000)
                     link.first.evaluate("el => el.click()")
                     print(f"  ✓ frame[{f.name}] JS-click a:has-text'{txt}'")
                     return True
@@ -116,6 +168,7 @@ def _click_year_check_via_text_in_frames(popup):
             try:
                 el = f.locator(f'text="{txt}"')
                 if el.count() > 0:
+                    el.first.wait_for(state="visible", timeout=5000)
                     el.first.evaluate("el => el.click()")
                     print(f"  ✓ frame[{f.name}] JS-click text'{txt}'")
                     return True
@@ -132,6 +185,7 @@ def _click_year_check_via_frame_locator(popup):
         try:
             el = conn.locator(f'a:has-text("{sel_text}")')
             if el.count() > 0:
+                el.first.wait_for(state="visible", timeout=5000)
                 el.first.evaluate("el => el.click()")
                 print(f"  ✓ frame_locator JS-click a:has-text'{sel_text}'")
                 return True
@@ -140,6 +194,7 @@ def _click_year_check_via_frame_locator(popup):
         try:
             el = conn.get_by_role("link", name=sel_text)
             if el.count() > 0:
+                el.first.wait_for(state="visible", timeout=5000)
                 el.first.evaluate("el => el.click()")
                 print(f"  ✓ frame_locator JS-click link'{sel_text}'")
                 return True
