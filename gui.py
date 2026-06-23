@@ -132,6 +132,11 @@ class App(tk.Tk):
         self.notebook.add(self.tab_settings, text="  ⚙ 设置  ")
         self._build_tab_settings(self.tab_settings)
 
+        # 标签页3: 黑名单 🆕
+        self.tab_skip = ttk.Frame(self.notebook, padding=8)
+        self.notebook.add(self.tab_skip, text="  🚫 黑名单  ")
+        self._build_tab_skip(self.tab_skip)
+
         # ── 底部控制按钮 ──
         ctrl = ttk.Frame(self)
         ctrl.pack(fill=tk.X, padx=12, pady=(4, 10))
@@ -311,45 +316,6 @@ class App(tk.Tk):
         ttk.Entry(row8, textvariable=self.slow_var, width=6).pack(side=tk.LEFT, padx=(8, 0))
         ttk.Label(row8, text="秒  （每步操作之间的等待时间）", foreground="gray").pack(side=tk.LEFT, padx=(4, 0))
 
-        # ── 🆕 黑名单管理区 ──
-        skip_frame = ttk.LabelFrame(container, text="🚫 黑名单管理", padding=12)
-        skip_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 8))
-
-        # 顶部说明
-        info_row = ttk.Frame(skip_frame)
-        info_row.pack(fill=tk.X, pady=(0, 6))
-        ttk.Label(info_row, text="跳过这些车（不会再跑）。服务器提示'不能创建流程'时自动加。",
-                  foreground="gray", wraplength=600).pack(side=tk.LEFT)
-
-        # 列表区
-        list_row = ttk.Frame(skip_frame)
-        list_row.pack(fill=tk.BOTH, expand=True, pady=(0, 6))
-
-        self.skip_listbox = tk.Listbox(
-            list_row, height=6, font=("Consolas", 10),
-            selectmode=tk.EXTENDED,  # 允许多选
-        )
-        skip_scroll = ttk.Scrollbar(list_row, orient=tk.VERTICAL, command=self.skip_listbox.yview)
-        self.skip_listbox.config(yscrollcommand=skip_scroll.set)
-        self.skip_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        skip_scroll.pack(side=tk.LEFT, fill=tk.Y)
-
-        # 按钮区
-        skip_btns = ttk.Frame(skip_frame)
-        skip_btns.pack(fill=tk.X)
-        ttk.Button(skip_btns, text="🗑 移除选中",
-                   command=self._remove_selected_skip_plates).pack(side=tk.LEFT)
-        ttk.Button(skip_btns, text="🔄 刷新",
-                   command=self._refresh_skip_listbox).pack(side=tk.LEFT, padx=(4, 0))
-        ttk.Button(skip_btns, text="🧹 清空全部",
-                   command=self._clear_all_skip_plates).pack(side=tk.LEFT, padx=(4, 0))
-        self.skip_count_var = tk.StringVar(value="共 0 辆")
-        ttk.Label(skip_btns, textvariable=self.skip_count_var,
-                  foreground="gray").pack(side=tk.RIGHT)
-
-        # 初始化列表
-        self._refresh_skip_listbox()
-
         # ── 保存按钮 ──
         btn_row = ttk.Frame(container)
         btn_row.pack(fill=tk.X, pady=(4, 0))
@@ -384,6 +350,45 @@ class App(tk.Tk):
             days_str = ",".join(selected)
             return f"{minute} {hour} * * {days_str}"
         return ""
+
+    # --------------------------------------------------------
+    # 标签页3: 黑名单 🆕
+    # --------------------------------------------------------
+    def _build_tab_skip(self, parent):
+        # 顶部说明
+        info = ttk.Frame(parent)
+        info.pack(fill=tk.X, pady=(0, 6))
+        ttk.Label(info, text="跳过这些车（不会再跑）。服务器提示'不能创建流程'时自动加。",
+                  foreground="gray", wraplength=600).pack(side=tk.LEFT)
+        self.skip_count_var = tk.StringVar(value="共 0 辆")
+        ttk.Label(info, textvariable=self.skip_count_var,
+                  font=("Microsoft YaHei", 11, "bold"), foreground="#1a73e8").pack(side=tk.RIGHT)
+
+        # 列表区（占中间大部）
+        list_frame = ttk.LabelFrame(parent, text="黑名单", padding=4)
+        list_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 6))
+
+        self.skip_listbox = tk.Listbox(
+            list_frame, font=("Consolas", 11),
+            selectmode=tk.EXTENDED,  # 允许多选
+        )
+        skip_scroll = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.skip_listbox.yview)
+        self.skip_listbox.config(yscrollcommand=skip_scroll.set)
+        self.skip_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        skip_scroll.pack(side=tk.LEFT, fill=tk.Y)
+
+        # 按钮区
+        skip_btns = ttk.Frame(parent)
+        skip_btns.pack(fill=tk.X, pady=(4, 0))
+        ttk.Button(skip_btns, text="🗑 移除选中",
+                   command=self._remove_selected_skip_plates).pack(side=tk.LEFT)
+        ttk.Button(skip_btns, text="🔄 刷新",
+                   command=self._refresh_skip_listbox).pack(side=tk.LEFT, padx=(4, 0))
+        ttk.Button(skip_btns, text="🧹 清空全部",
+                   command=self._clear_all_skip_plates).pack(side=tk.LEFT, padx=(4, 0))
+
+        # 初始化列表
+        self._refresh_skip_listbox()
 
     def _toggle_schedule(self):
         """根据是否启用定时，显示/隐藏定时详情"""
