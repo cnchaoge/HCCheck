@@ -1460,6 +1460,11 @@ def main() -> None:
                     failures.pop(plate, None)
                     step("当前车辆完成,准备处理下一辆")
                 except Exception as e:
+                    # 特殊处理:如果车在异常抛出前就被加黑名单(如'不能创建流程'检测)
+                    # 则不算失败,不计数不重试(只是跳过)
+                    if plate in SKIP_PLATES:
+                        print(f"  ⏭ {plate} 已加黑名单,跳过 (原因: {e})")
+                        continue
                     failures[plate] = failures.get(plate, 0) + 1
                     fc = failures[plate]
                     print(f"\n  ❌ {plate} 处理失败 ({fc}/{config.MAX_FAIL}): {e}")
