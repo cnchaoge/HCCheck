@@ -239,6 +239,35 @@ def handle(popup, context, main_page, plate):
         # 没有车牌链接就跳过
         pass
 
+    # 🆕 尝试 Lodop API 配置不弹预览
+    # Lodop 控件的 SET_PRINT_MODE 可以设置打印模式
+    # - PREVIEW_IN_BROWSER=false → 不在浏览器内弹预览
+    # - AUTO_CLOSE_PREWINDOW=true → 自动关闭预览窗口
+    lodop_ok = False
+    for _target in [popup] + list(popup.frames):
+        try:
+            _result = _target.evaluate("""() => {
+                try {
+                    if (typeof window.getLodop !== 'function') return 'no_fn';
+                    const lodop = window.getLodop();
+                    if (!lodop) return 'no_obj';
+                    if (typeof lodop.SET_PRINT_MODE !== 'function') return 'no_method';
+                    lodop.SET_PRINT_MODE('PREVIEW_IN_BROWSER', false);
+                    lodop.SET_PRINT_MODE('AUTO_CLOSE_PREWINDOW', true);
+                    return 'ok';
+                } catch(e) { return 'err:' + e.message; }
+            }""")
+            _label = 'popup' if _target is popup else f'frame[{_target.name}]'
+            if _result == 'ok':
+                print(f"  ✓ Lodop 配置已注入({_label}): 关闭预览")
+                lodop_ok = True
+                break
+            elif config.DEBUG:
+                print(f"  调试 - Lodop 配置({_label}): {_result}")
+        except Exception as e:
+            if config.DEBUG:
+                print(f"  调试 - Lodop 配置异常: {e}")
+
     # 记录点击打印前的 pages (用于检测新开 tab)
     pages_before = list(context.pages)
 
