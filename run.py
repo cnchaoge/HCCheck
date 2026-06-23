@@ -637,6 +637,7 @@ def _phase1_select_and_create(page, plate, menu_name):
             raise
     pa(3)
     pa(2)
+    pa(3)  # 等工作台更新，避免 process_marked 读工作台时还是旧数据
 
     return popup1, config.STEP_VEHICLE_CHECK
 
