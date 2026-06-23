@@ -422,6 +422,7 @@ def _phase1_select_and_create(page, plate, menu_name):
     """Phase1: 选菜单 + 创建任务
     前提：主循环已确认工作台空,先切回工作台再创建
     """
+    global _CREATE_BLOCKED_DIALOG  # 🆕 访问模块级变量需声明
     print(f"  [Phase1] {menu_name}")
     main_kef = get_main_kef(page)
 
