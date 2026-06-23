@@ -280,12 +280,19 @@ def wait_for_login_and_navigate(page: Page, username: str = "", password: str = 
     print("\n[2/2] 导航完成 ✅")
 
     # 切到工作台（主循环会自己决定要不要展开货运管理拉新车）
-    try:
-        safe(contents.get_by_role("link", name=config.MENU_WORKBENCH), timeout=5000).click()
-        print("✅ 已切换到 [工作台]")
-        pa(1)
-    except:
-        print("⚠️ [工作台] 点击失败")
+    # 偶尔页面还没完全加载,加重试保证能进到工作台
+    for _retry in range(3):
+        try:
+            safe(contents.get_by_role("link", name=config.MENU_WORKBENCH), timeout=8000).click()
+            print("✅ 已切换到 [工作台]")
+            pa(2)
+            break
+        except Exception as e:
+            if _retry < 2:
+                print(f"  调试 - 工作台点击失败,等 3s 重试 ({_retry + 1}/3): {e}")
+                pa(3)
+            else:
+                print(f"⚠️ [工作台] 点击失败（重试 3 次都失败）: {e}")
 
     step("开始批量处理")
 

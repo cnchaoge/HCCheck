@@ -217,7 +217,7 @@ def _close_print_preview(context, pages_before):
                 pass
 
     if closed == 0:
-        print(f"  ⚠️ 未找到可关闭的打印预览")
+        print(f"  ℹ️ 打印预览可能仍在显示（不影响后续流程）")
     return closed
 
 
