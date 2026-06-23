@@ -279,22 +279,9 @@ def wait_for_login_and_navigate(page: Page, username: str = "", password: str = 
 
     print("\n[2/2] 导航完成 ✅")
 
-    # 登录后点击货运管理的展开按钮
+    # 切到工作台（主循环会自己决定要不要展开货运管理拉新车）
     try:
-        freight_row = contents.locator(f"a:has-text('{config.MENU_FREIGHT_MANAGE}')").locator("..").locator("img")
-        if freight_row.count() > 0:
-            freight_row.first.click()
-            print("✅ 已点击 [货运管理] 展开按钮")
-        else:
-            contents.get_by_role("link", name=config.MENU_FREIGHT_MANAGE).click()
-            print("✅ 已点击 [货运管理] 文字")
-        pa(0.5)
-    except Exception as e:
-        print(f"⚠️ [货运管理] 点击失败: {e}")
-
-    # 再点击工作台
-    try:
-        safe(contents.get_by_role("link", name=config.MENU_WORKBENCH), timeout=3000).click()
+        safe(contents.get_by_role("link", name=config.MENU_WORKBENCH), timeout=5000).click()
         print("✅ 已切换到 [工作台]")
         pa(1)
     except:
@@ -420,26 +407,13 @@ def open_task_popup(page, plate):
 
 
 def _phase1_select_and_create(page, plate, menu_name):
-    """Phase1: 选车 + 创建任务
-    先检查工作台有没有已有任务(续跑),有就接管
-    没有就创建新任务,返回 (popup, STEP_VEHICLE_CHECK)
+    """Phase1: 选菜单 + 创建任务
+    前提：主循环已确认工作台空,直接走创建流程
     """
     print(f"  [Phase1] {menu_name}")
-    contents = get_contents(page)
     main_kef = get_main_kef(page)
 
-    # 先去工作台
-    safe(contents.get_by_role("link", name=config.MENU_WORKBENCH)).click()
-    pa(2)
-
-    # 先检查工作台有没有已有任务
-    step("工作台检查")
-    has_task, existing_popup, step_name = _check_workbench_for_task(page, plate)
-    if has_task and existing_popup:
-        print(f"   续跑起点: {step_name}")
-        return existing_popup, step_name
-
-    print("  工作台无已有任务,创建新任务")
+    # 已在工作台（主循环跳转过来）,直接创建任务
     try:
         safe(main_kef.get_by_role("link", name=config.BTN_ADD), timeout=3000).click()
     except:
@@ -652,10 +626,6 @@ def _phase1_select_and_create(page, plate, menu_name):
             raise
     pa(3)
     pa(2)
-
-    # 调试: 打印弹窗状态
-    print(f"  🔍 popup1 URL: {popup1.url[:80]}")
-    print(f"  🔍 popup1 frames: {[f.name for f in popup1.frames if f.name]}")
 
     return popup1, config.STEP_VEHICLE_CHECK
 
@@ -1087,9 +1057,8 @@ def process_unmarked(page: Page, plate: str, run_from_step: Optional[str] = None
 
         # 完成后系统会自动关闭 popup,下一轮循环会重新读工作台
         pa(2)
-        # 如果是归档,下一轮循环会发现节点变成未识别,退出
+        # 如果是归档,提前返回（避免循环剩下的空转,完成消息由主循环打）
         if current_node == config.STEP_ARCHIVE:
-            print(f"  ✅ {plate} 全部完成!")
             return
 
     print(f"  ✅ {plate} 流程结束")
@@ -1139,25 +1108,16 @@ def process_marked(page: Page, plate: str, run_from_step: Optional[str] = None, 
             print(f"  ⚠️ 打开 popup 失败")
             break
 
-        # 执行对应 handler
-        step_names = {
-            config.STEP_BUSINESS_REVIEW: "业务岗位审核",
-            config.STEP_VEHICLE_ANNUAL: "车辆年审",
-            config.STEP_ARCHIVE: "归档",
-        }
-        print(f"\n  ═══════════════════")
-        print(f"  📋 popup: {step_names.get(current_node, current_node)}")
-        print(f"  ═══════════════════")
-        push_status(step=step_names.get(current_node, current_node))
+        # 执行对应 handler（handler 内部会打自己的 header: 📋 popup3: 业务岗位审核 等）
+        push_status(step=current_node)
         step_handlers[current_node](popup)
 
         # 完成后系统会自动关闭 popup
         pa(2)
         popup = None  # 下轮循环重新开
 
-        # 如果是归档,下一轮循环会发现节点变成未识别,退出
+        # 如果是归档,提前返回（避免循环剩下的空转,完成消息由主循环打）
         if current_node == config.STEP_ARCHIVE:
-            print(f"  ✅ {plate} 全部完成!")
             return
 
     print(f"  ✅ {plate} 流程结束")

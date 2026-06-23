@@ -38,9 +38,7 @@ def handle(popup, context, plate,
             # 仍然尝试提交,让流程尽量往下走
             pass
 
-    # 等子页面加载 (强化: 10s 等待 + 关键词检测)
-    pa(2)
-    _wait_for_year_check_subpage(popup, timeout=10)
+    # 点完链接后短间隔,让页面就位
     pa(2)
 
     # 提交
@@ -100,39 +98,6 @@ def _click_year_check(popup, max_retry=2):
             print(f"  调试 - 第 {attempt + 1} 次未找到,等 3 秒重试...")
             pa(3)
 
-    return False
-
-
-def _wait_for_year_check_subpage(popup, timeout=10):
-    """等待年度审验子页面加载
-    强化: 等 body 文本出现检测关键词,默认 10s 超时
-    """
-    try:
-        wf_frames = [f for f in popup.frames if f.name == "_workflow_main"]
-        if not wf_frames:
-            # 退化: 找 _Iframe_content (link 所在 frame)
-            for f in popup.frames:
-                if f.name == "_Iframe_content":
-                    wf_frames = [f]
-                    break
-        if not wf_frames:
-            print(f"  调试 - 未找到 _workflow_main / _Iframe_content frame")
-            return False
-        wf = wf_frames[0]
-
-        # 轮询 N 次,每次 1 秒
-        for i in range(timeout):
-            try:
-                text = wf.locator("body").text_content(timeout=2000)
-                if text and any(kw in text for kw in ["检测结果", "检测项目", "检测结论", "不合格项", "综检结果"]):
-                    print(f"  ✓ 年度审验子页面已加载 (attempt={i + 1})")
-                    return True
-            except:
-                pass
-            pa(1)
-        print(f"  ⚠️ 年度审验子页面加载超时({timeout}s),可能未跳转")
-    except Exception as e:
-        print(f"  调试 - wait_for_year_check_subpage 异常: {e}")
     return False
 
 
