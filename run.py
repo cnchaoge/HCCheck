@@ -1058,13 +1058,8 @@ def process_unmarked(page: Page, plate: str, run_from_step: Optional[str] = None
             config.STEP_ARCHIVE: "归档",
         }
         step_name = step_names_zh.get(current_node, current_node)
-        # 人性化提示: 带车牌 + 步骤说明
-        print(f"\n  ════════════════════════════════════")
-        print(f"  🚗 车牌: {plate}")
-        print(f"  📋 当前步骤: {step_name} (第 {processed} 辆车)")
-        print(f"  ⏳ 正在处理中...")
+        # 状态栏同步（header 由 handler 内部打,如 '📋 popup2: 技术岗位审核'）
         push_status(step=step_name)
-        print(f"  ════════════════════════════════════")
         step_handlers[current_node](popup)
 
         # 完成后系统会自动关闭 popup,下一轮循环会重新读工作台

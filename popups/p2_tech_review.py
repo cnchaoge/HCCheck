@@ -242,6 +242,15 @@ def handle(popup, context, main_page, plate):
     # 记录点击打印前的 pages (用于检测新开 tab)
     pages_before = list(context.pages)
 
+    # 🆕 用 CDP 抑制 Chrome 原生打印 dialog (Lodop.PREVIEW 会触发 window.print())
+    cdp_session = None
+    try:
+        cdp_session = context.new_cdp_session(popup)
+        cdp_session.send("Page.setPrintDialogBehavior", {"behavior": "suppress"})
+    except Exception as e:
+        if config.DEBUG:
+            print(f"  调试 - CDP 抑制打印 dialog 失败: {e}")
+
     # 4 种策略找打印链接
     if not _click_print_link_v1(wf, popup):
         if not _click_print_link_v2(popup):
@@ -258,6 +267,14 @@ def handle(popup, context, main_page, plate):
     pa(2)
     _close_print_preview(context, pages_before)
     pa(1)
+
+    # 🆕 恢复默认打印 dialog 行为
+    if cdp_session:
+        try:
+            cdp_session.send("Page.setPrintDialogBehavior", {"behavior": "default"})
+            cdp_session.detach()
+        except:
+            pass
     step("技术岗位审核: 打印完成,准备提交")
 
     # 提交 + 选下一处理人
