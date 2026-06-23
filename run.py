@@ -28,6 +28,11 @@ from typing import Optional
 # ========= 黑名单(失败 N 次的车牌不再自动重试) =========
 SKIP_PLATES = set()
 
+# ========= “不能创建流程” 错误捕获 =========
+# 业务规则:车辆有未完成旧流程时,服务器会弹 alert 拒绝创建
+# alert handler 抳到后设置这个变量,Phase1 检查后加黑名单跳过
+_CREATE_BLOCKED_DIALOG = None
+
 # ========= 处理结果记录（跑完后导出 Excel） =========
 import time as _time
 RESULTS = []  # [{plate, flow_type, start_time, end_time, status, error}]
@@ -640,6 +645,15 @@ def _phase1_select_and_create(page, plate, menu_name):
     pa(3)
     pa(2)
     pa(3)  # 等工作台更新，避免 process_marked 读工作台时还是旧数据
+
+    # 🆕 检测“不能创建流程”对话框(业务规则:车辆有未完成旧流程)
+    if _CREATE_BLOCKED_DIALOG:
+        err_msg = _CREATE_BLOCKED_DIALOG
+        _CREATE_BLOCKED_DIALOG = None  # reset
+        print(f"  ⚠️ 不能创建流程: {err_msg}")
+        print(f"  ⏭ {plate} 有未完成旧流程,加入黑名单并跳过")
+        SKIP_PLATES.add(plate)
+        raise Exception(f"不能创建流程(已加入黑名单): {plate}")
 
     return popup1, config.STEP_VEHICLE_CHECK
 
@@ -1265,7 +1279,16 @@ def main() -> None:
         page = context.new_page()
         page.on("pageerror", lambda e: _filter_page_error(e))
         # 自动处理所有对话框(如confirm、alert、prompt"),吃掉关闭后的异常
+        # 额外检测:如果弹框内容是'不能创建流程'(业务规则:车辆有未完成旧流程)
+        # 则设置 _CREATE_BLOCKED_DIALOG,让 Phase1 检到后加黑名单跳过
         def _auto_accept_dialog(dialog):
+            global _CREATE_BLOCKED_DIALOG
+            try:
+                msg = (dialog.message or "")
+                if "不能创建流程" in msg:
+                    _CREATE_BLOCKED_DIALOG = msg
+            except:
+                pass
             try:
                 dialog.accept()
             except:
