@@ -12,6 +12,8 @@
     不带挂:   popup1 车辆检测 → popup2 技术岗位审核 → popup3 业务岗位审核 → popup4 车辆年审 → popup5 归档
     带挂:     popup1 车辆检测 → popup2 业务岗位审核 → popup3 车辆年审1 → popup4 车辆年审2 → popup5 归档
 """
+import json
+import os
 import config
 from utils import safe, pa, step, paste_into, screenshot_on_error
 from dialog import do_dialog
@@ -27,6 +29,48 @@ from typing import Optional
 
 # ========= 黑名单(失败 N 次的车牌不再自动重试) =========
 SKIP_PLATES = set()
+
+# 黑名单持久化文件路径
+_SKIP_PLATES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".skip_plates.json")
+
+
+def _load_skip_plates():
+    """从 .skip_plates.json 加载黑名单"""
+    if os.path.exists(_SKIP_PLATES_FILE):
+        try:
+            with open(_SKIP_PLATES_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return set(data.get("plates", []))
+        except Exception as e:
+            if config.DEBUG:
+                print(f"  调试 - 加载黑名单失败: {e}")
+    return set()
+
+
+def _save_skip_plates():
+    """保存黑名单到 .skip_plates.json"""
+    try:
+        data = {
+            "plates": sorted(SKIP_PLATES),
+            "updated_at": _time.strftime("%Y-%m-%dT%H:%M:%S"),
+        }
+        with open(_SKIP_PLATES_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        if config.DEBUG:
+            print(f"  调试 - 保存黑名单失败: {e}")
+
+
+def _add_to_skip_plates(plate):
+    """加车进黑名单(同时保存到磁盘)"""
+    SKIP_PLATES.add(plate)
+    _save_skip_plates()
+
+
+def _remove_from_skip_plates(plate):
+    """从黑名单移除车(同时保存到磁盘)"""
+    SKIP_PLATES.discard(plate)
+    _save_skip_plates()
 
 # ========= “不能创建流程” 错误捕获 =========
 # 业务规则:车辆有未完成旧流程时,服务器会弹 alert 拒绝创建
@@ -653,7 +697,7 @@ def _phase1_select_and_create(page, plate, menu_name):
         _CREATE_BLOCKED_DIALOG = None  # reset
         print(f"  ⚠️ 不能创建流程: {err_msg}")
         print(f"  ⏭ {plate} 有未完成旧流程,加入黑名单并跳过")
-        SKIP_PLATES.add(plate)
+        _add_to_skip_plates(plate)  # 🆕 自动保存到磁盘
         raise Exception(f"不能创建流程(已加入黑名单): {plate}")
 
     return popup1, config.STEP_VEHICLE_CHECK
@@ -1274,6 +1318,10 @@ def _filter_page_error(err):
 
 
 def main() -> None:
+    # 启动时加载黑名单（从磁盘）
+    SKIP_PLATES.update(_load_skip_plates())
+    if SKIP_PLATES:
+        print(f"🚫 加载黑名单: {len(SKIP_PLATES)} 辆车")
     with sync_playwright() as p:
         browser = p.chromium.launch(channel="chrome", headless=config.HEADLESS)
         context = browser.new_context(viewport={"width": 1600, "height": 900})
@@ -1402,7 +1450,7 @@ def main() -> None:
                                 "error": str(e),
                             })
                             if fc >= config.MAX_FAIL:
-                                SKIP_PLATES.add(plate)
+                                _add_to_skip_plates(plate)  # 🆕 自动保存到磁盘
                                 print(f"  ⏭ {plate} 已加入黑名单,不再自动重试")
                         pa(1.5)
                     continue  # 跑完所有任务后回到顶部重新检查工作台
@@ -1480,7 +1528,7 @@ def main() -> None:
                         "error": str(e),
                     })
                     if fc >= config.MAX_FAIL:
-                        SKIP_PLATES.add(plate)
+                        _add_to_skip_plates(plate)  # 🆕 自动保存到磁盘
                         print(f"  ⏭ {plate} 已加入黑名单,不再自动重试")
                 pa(1.5)
 

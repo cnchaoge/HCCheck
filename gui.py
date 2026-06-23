@@ -19,6 +19,7 @@ sys.path.insert(0, SCRIPT_DIR)
 
 import config
 from run import main as run_main
+import run as _run  # 用于访问 SKIP_PLATES / _load_skip_plates() / _save_skip_plates() / _add_to_skip_plates() / _remove_from_skip_plates()
 
 # 用户配置文件路径
 CONFIG_FILE = os.path.join(SCRIPT_DIR, ".user_config.json")
@@ -310,6 +311,45 @@ class App(tk.Tk):
         ttk.Entry(row8, textvariable=self.slow_var, width=6).pack(side=tk.LEFT, padx=(8, 0))
         ttk.Label(row8, text="秒  （每步操作之间的等待时间）", foreground="gray").pack(side=tk.LEFT, padx=(4, 0))
 
+        # ── 🆕 黑名单管理区 ──
+        skip_frame = ttk.LabelFrame(container, text="🚫 黑名单管理", padding=12)
+        skip_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 8))
+
+        # 顶部说明
+        info_row = ttk.Frame(skip_frame)
+        info_row.pack(fill=tk.X, pady=(0, 6))
+        ttk.Label(info_row, text="跳过这些车（不会再跑）。服务器提示'不能创建流程'时自动加。",
+                  foreground="gray", wraplength=600).pack(side=tk.LEFT)
+
+        # 列表区
+        list_row = ttk.Frame(skip_frame)
+        list_row.pack(fill=tk.BOTH, expand=True, pady=(0, 6))
+
+        self.skip_listbox = tk.Listbox(
+            list_row, height=6, font=("Consolas", 10),
+            selectmode=tk.EXTENDED,  # 允许多选
+        )
+        skip_scroll = ttk.Scrollbar(list_row, orient=tk.VERTICAL, command=self.skip_listbox.yview)
+        self.skip_listbox.config(yscrollcommand=skip_scroll.set)
+        self.skip_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        skip_scroll.pack(side=tk.LEFT, fill=tk.Y)
+
+        # 按钮区
+        skip_btns = ttk.Frame(skip_frame)
+        skip_btns.pack(fill=tk.X)
+        ttk.Button(skip_btns, text="🗑 移除选中",
+                   command=self._remove_selected_skip_plates).pack(side=tk.LEFT)
+        ttk.Button(skip_btns, text="🔄 刷新",
+                   command=self._refresh_skip_listbox).pack(side=tk.LEFT, padx=(4, 0))
+        ttk.Button(skip_btns, text="🧹 清空全部",
+                   command=self._clear_all_skip_plates).pack(side=tk.LEFT, padx=(4, 0))
+        self.skip_count_var = tk.StringVar(value="共 0 辆")
+        ttk.Label(skip_btns, textvariable=self.skip_count_var,
+                  foreground="gray").pack(side=tk.RIGHT)
+
+        # 初始化列表
+        self._refresh_skip_listbox()
+
         # ── 保存按钮 ──
         btn_row = ttk.Frame(container)
         btn_row.pack(fill=tk.X, pady=(4, 0))
@@ -353,6 +393,54 @@ class App(tk.Tk):
         else:
             self.schedule_detail_frame.pack_forget()
             self.custom_days_frame.pack_forget()
+
+    # --------------------------------------------------------
+    # 🆕 黑名单管理
+    # --------------------------------------------------------
+    def _refresh_skip_listbox(self):
+        """从磁盘重新加载黑名单,刷新 listbox"""
+        # 从磁盘重新读
+        disk_plates = _run._load_skip_plates()
+        # 合并到内存里的 (以防运行中刚加的)
+        _run.SKIP_PLATES.update(disk_plates)
+        # 清空 listbox
+        self.skip_listbox.delete(0, tk.END)
+        # 按字母顺序填充
+        for plate in sorted(_run.SKIP_PLATES):
+            self.skip_listbox.insert(tk.END, plate)
+        # 更新计数
+        count = len(_run.SKIP_PLATES)
+        self.skip_count_var.set(f"共 {count} 辆")
+
+    def _remove_selected_skip_plates(self):
+        """移除 listbox 里选中的车牌"""
+        selected = self.skip_listbox.curselection()
+        if not selected:
+            self.settings_status_var.set("⚠️ 请先选中要移除的车牌")
+            return
+        removed = []
+        for idx in selected:
+            plate = self.skip_listbox.get(idx)
+            _run._remove_from_skip_plates(plate)  # 从内存 + 磁盘移除
+            removed.append(plate)
+        # 刷新 listbox
+        self._refresh_skip_listbox()
+        # 提示
+        self.settings_status_var.set(f"✅ 已移除 {len(removed)} 辆: {', '.join(removed)}")
+
+    def _clear_all_skip_plates(self):
+        """清空全部黑名单"""
+        if not _run.SKIP_PLATES:
+            return
+        # 确认
+        from tkinter import messagebox
+        if not messagebox.askyesno("确认", f"确定要清空全部 {len(_run.SKIP_PLATES)} 辆黑名单吗？\n（清空后这些车会被重新尝试）"):
+            return
+        count = len(_run.SKIP_PLATES)
+        _run.SKIP_PLATES.clear()
+        _run._save_skip_plates()
+        self._refresh_skip_listbox()
+        self.settings_status_var.set(f"✅ 已清空 {count} 辆黑名单")
 
     # --------------------------------------------------------
     # 保存设置
