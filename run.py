@@ -418,16 +418,11 @@ def _phase1_select_and_create(page, plate, menu_name):
     前提：主循环已确认工作台空,先切回工作台再创建
     """
     print(f"  [Phase1] {menu_name}")
-    contents = get_contents(page)
     main_kef = get_main_kef(page)
 
     # 切回工作台（主循环走的是"普货审验"列表路径,Phase1 必须在工作台上创建）
-    try:
-        safe(contents.get_by_role("link", name=config.MENU_WORKBENCH), timeout=5000).click()
-    except:
-        # 已经在工作台的话可能点不动,跳过
-        pass
-    pa(2)
+    # 用 goto_workbench 统一函数（主循环也用这个,保证一致性）
+    goto_workbench(page)
 
     # 不再扫工作台（主循环已确认空）
 
