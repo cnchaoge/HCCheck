@@ -1464,6 +1464,7 @@ def main() -> None:
                     # 则不算失败,不计数不重试(只是跳过)
                     if plate in SKIP_PLATES:
                         print(f"  ⏭ {plate} 已加黑名单,跳过 (原因: {e})")
+                        _close_all_popups(page)  # 🆕 清理残留弹窗,避免影响下一辆
                         continue
                     failures[plate] = failures.get(plate, 0) + 1
                     fc = failures[plate]
