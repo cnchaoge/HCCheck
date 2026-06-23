@@ -127,15 +127,15 @@ class App(tk.Tk):
         self.notebook.add(self.tab_run, text="  🚀 运行  ")
         self._build_tab_run(self.tab_run)
 
-        # 标签页2: 设置
-        self.tab_settings = ttk.Frame(self.notebook, padding=8)
-        self.notebook.add(self.tab_settings, text="  ⚙ 设置  ")
-        self._build_tab_settings(self.tab_settings)
-
-        # 标签页3: 黑名单 🆕
+        # 标签页2: 黑名单
         self.tab_skip = ttk.Frame(self.notebook, padding=8)
         self.notebook.add(self.tab_skip, text="  🚫 黑名单  ")
         self._build_tab_skip(self.tab_skip)
+
+        # 标签页3: 设置
+        self.tab_settings = ttk.Frame(self.notebook, padding=8)
+        self.notebook.add(self.tab_settings, text="  ⚙ 设置  ")
+        self._build_tab_settings(self.tab_settings)
 
         # ── 底部控制按钮 ──
         ctrl = ttk.Frame(self)
