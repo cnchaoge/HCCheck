@@ -243,9 +243,10 @@ def handle(popup, context, main_page, plate):
     pages_before = list(context.pages)
 
     # 🆕 用 CDP 抑制 Chrome 原生打印 dialog (Lodop.PREVIEW 会触发 window.print())
+    # 设在 main_page 上,这样 iframe (_Iframe_content 里的打印链接) 也能继承
     cdp_session = None
     try:
-        cdp_session = context.new_cdp_session(popup)
+        cdp_session = context.new_cdp_session(main_page)
         cdp_session.send("Page.setPrintDialogBehavior", {"behavior": "suppress"})
     except Exception as e:
         if config.DEBUG:

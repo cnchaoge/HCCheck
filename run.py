@@ -1063,7 +1063,7 @@ def process_unmarked(page: Page, plate: str, run_from_step: Optional[str] = None
         step_handlers[current_node](popup)
 
         # 完成后系统会自动关闭 popup,下一轮循环会重新读工作台
-        pa(2)
+        pa(5)  # 等工作台异步更新（pa(2) 太短,服务器还没推）
         # 如果是归档,提前返回（避免循环剩下的空转,完成消息由主循环打）
         if current_node == config.STEP_ARCHIVE:
             return
@@ -1120,7 +1120,7 @@ def process_marked(page: Page, plate: str, run_from_step: Optional[str] = None, 
         step_handlers[current_node](popup)
 
         # 完成后系统会自动关闭 popup
-        pa(2)
+        pa(5)  # 等工作台异步更新（pa(2) 太短,服务器还没推）
         popup = None  # 下轮循环重新开
 
         # 如果是归档,提前返回（避免循环剩下的空转,完成消息由主循环打）
