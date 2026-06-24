@@ -11,7 +11,7 @@
   - input() 包 try/except 防止 stdin 关闭崩
 """
 import config
-from utils import safe, pa, step
+from utils import safe, pa, step, wait_until
 from dialog import do_dialog
 
 
@@ -80,8 +80,37 @@ def _click_plate_link(popup, plate):
         pass
 
 
+def _any_year_check_visible(popup):
+    """检查 popup 任何 frame 里是否有"年度审验"链接可见（轮询条件用）
+
+    复用 3 个策略的 selector，每个 get_by_role / locator 都包 try/except
+    元素不存在 / 不可见时返回 False，让 wait_until 继续轮询。
+    """
+    try:
+        for f in popup.frames:
+            for txt in config.YEAR_CHECK_TEXTS:
+                try:
+                    if f.get_by_role("link", name=txt).first.is_visible():
+                        return True
+                except Exception:
+                    pass
+                try:
+                    if f.locator(f'a:has-text("{txt}")').first.is_visible():
+                        return True
+                except Exception:
+                    pass
+                try:
+                    if f.locator(f'text="{txt}"').first.is_visible():
+                        return True
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    return False
+
+
 def _click_year_check(popup, max_retry=2):
-    """点"年度审验"链接,带重试和显式等待"""
+    """点"年度审验"链接,带重试和智能等待（替代 pa(3)）"""
     for attempt in range(max_retry):
         # 3 个策略依次尝试
         clicked = _click_year_check_via_frames(popup)
@@ -93,10 +122,19 @@ def _click_year_check(popup, max_retry=2):
         if clicked:
             return True
 
-        # 没点到,等一会儿再试
+        # 没点到,用 wait_until 智能等待（轮询到链接可见或超时），替代原来猜时间的 pa(3)
         if attempt < max_retry - 1:
-            print(f"  调试 - 第 {attempt + 1} 次未找到,等 3 秒重试...")
-            pa(3)
+            print(f"  调试 - 第 {attempt + 1} 次未找到,智能等待链接...")
+            try:
+                wait_until(
+                    lambda: _any_year_check_visible(popup),
+                    timeout=3,
+                    poll=0.5,
+                    description="年度审验链接可见",
+                )
+            except TimeoutError:
+                # 超时仍不可见，下一轮重试接管
+                pass
 
     return False
 
