@@ -26,6 +26,10 @@ PA_SHORT = 0.5           # 短间隔
 PA_VERY_SHORT = 0.15     # 输入框内操作
 PA_LONG = 5              # 长间隔
 
+# ========= 智能等待常量（wait_until / wait_until_not 默认值） =========
+WAIT_UNTIL_TIMEOUT = 10.0   # 默认超时秒数
+WAIT_UNTIL_POLL = 0.3       # 轮询间隔秒数
+
 # ========= 停止控制（GUI ↔ 主循环通信） =========
 # GUI 按"停止"时：
 #   CURRENT_PLATE 非空 → 设 SINGLE_RUN=True → 当前车跑完后温和退出
