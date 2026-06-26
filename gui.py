@@ -73,7 +73,7 @@ class TextRedirector:
 # 主窗口
 # ============================================================
 class App(tk.Tk):
-    VERSION = "v1.0"
+    VERSION = "v1.1.0"
     APP_NAME = "HCCheck"
 
     def __init__(self):
