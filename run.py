@@ -30,15 +30,15 @@ from typing import Optional
 # ========= 黑名单(失败 N 次的车牌不再自动重试) =========
 SKIP_PLATES = set()
 
-# 黑名单持久化文件路径
-_SKIP_PLATES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".skip_plates.json")
+# 黑名单持久化文件路径（位于用户数据目录，打包后保留）
+SKIP_PLATES_FILE = config.SKIP_PLATES_FILE
 
 
 def _load_skip_plates():
-    """从 .skip_plates.json 加载黑名单"""
-    if os.path.exists(_SKIP_PLATES_FILE):
+    """从 skip_plates.json 加载黑名单"""
+    if os.path.exists(SKIP_PLATES_FILE):
         try:
-            with open(_SKIP_PLATES_FILE, "r", encoding="utf-8") as f:
+            with open(SKIP_PLATES_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
             return set(data.get("plates", []))
         except Exception as e:
@@ -54,7 +54,7 @@ def _save_skip_plates():
             "plates": sorted(SKIP_PLATES),
             "updated_at": _time.strftime("%Y-%m-%dT%H:%M:%S"),
         }
-        with open(_SKIP_PLATES_FILE, "w", encoding="utf-8") as f:
+        with open(SKIP_PLATES_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
     except Exception as e:
         if config.DEBUG:

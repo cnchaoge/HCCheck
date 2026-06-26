@@ -6,6 +6,33 @@ import os
 业务术语的同义变体(打印告知单的多种写法等)放在使用方局部列表里更直观,不在此处。
 """
 import re
+import sys
+
+
+def get_user_data_dir():
+    """获取用户数据目录（跨平台）
+
+    - Windows: %APPDATA%\\HCCheck
+    - macOS:   ~/Library/Application Support/HCCheck
+    - Linux:   $XDG_DATA_HOME/HCCheck 或 ~/.local/share/HCCheck
+    """
+    if sys.platform == "win32":
+        base = os.environ.get("APPDATA") or os.path.expanduser("~")
+    elif sys.platform == "darwin":
+        base = os.path.expanduser("~/Library/Application Support")
+    else:
+        base = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
+
+    data_dir = os.path.join(base, "HCCheck")
+    os.makedirs(data_dir, exist_ok=True)
+    return data_dir
+
+
+# 用户配置文件路径（PyInstaller 打包后也能保留在用户目录）
+USER_CONFIG_FILE = os.path.join(get_user_data_dir(), "user_config.json")
+
+# 黑名单车牌文件路径（同样位于用户数据目录）
+SKIP_PLATES_FILE = os.path.join(get_user_data_dir(), "skip_plates.json")
 
 # ========= 运行控制 =========
 DEBUG = False            # True: 每步按 y 才走
@@ -53,7 +80,7 @@ LOGIN_AUTO_SUBMIT = True  # True: 填完自动点登录; False: 等人工确认
 SCHEDULE = ""  # Cron 表达式, 如 "0 8 * * *" = 每天8点; 留空=不启用定时
 
 # ========= 系统设置（可在 GUI 调整） =========
-_gui_cfg_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".user_config.json")
+_gui_cfg_file = USER_CONFIG_FILE
 if os.path.exists(_gui_cfg_file):
     import json
     try:

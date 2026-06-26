@@ -13,6 +13,14 @@ import queue
 import json
 import subprocess
 
+# Windows 高分屏 DPI 适配（必须在创建窗口前设置）
+if sys.platform == "win32":
+    try:
+        import ctypes
+        ctypes.windll.shcore.SetProcessDpiAwareness(1)
+    except Exception:
+        pass
+
 # 确保能导入同目录模块
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SCRIPT_DIR)
@@ -21,8 +29,8 @@ import config
 from run import main as run_main
 import run as _run  # 用于访问 SKIP_PLATES / _load_skip_plates() / _save_skip_plates() / _add_to_skip_plates() / _remove_from_skip_plates()
 
-# 用户配置文件路径
-CONFIG_FILE = os.path.join(SCRIPT_DIR, ".user_config.json")
+# 用户配置文件路径（从 config 模块导入，位于用户数据目录，打包后保留）
+CONFIG_FILE = config.USER_CONFIG_FILE
 
 
 # ============================================================
@@ -79,8 +87,15 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title(f"HCCheck {self.VERSION} — 运管站货车审验自动化工具")
-        self.geometry("820x720")
-        self.minsize(720, 600)
+        self.geometry("780x600")
+        self.minsize(680, 520)
+
+        # 自动居中
+        self.update_idletasks()
+        w, h = self.winfo_width(), self.winfo_height()
+        x = (self.winfo_screenwidth() - w) // 2
+        y = (self.winfo_screenheight() - h) // 2
+        self.geometry(f"{w}x{h}+{x}+{y}")
 
         # 加载保存的配置
         self._saved_cfg = load_user_config()
@@ -754,12 +769,17 @@ class App(tk.Tk):
     # --------------------------------------------------------
     def _about(self):
         messagebox.showinfo(
-            "关于",
-            f"HCCheck {self.VERSION}\n\n"
-            "技术栈: Python + Playwright + Tkinter\n"
-            "流程: 车辆检测 → 技术审核 → 业务审核 → 车辆年审 → 归档\n"
-            "支持: 带挂 / 不带挂 两种流程\n\n"
-            "© 2026 超哥"
+            "关于 HCCheck",
+            f"HCCheck {self.VERSION}\n"
+            f"\u8fd0\u7ba1\u7ad9\u8d27\u8f66\u5ba1\u9a8c\u81ea\u52a8\u5316\u5de5\u5177\n"
+            "\n"
+            "\u6587\u4ef6\u7248\u672c:        1.1.0.0\n"
+            "\u5f00\u6e90\u9879\u76ee:        http://github.com/cnchaoge/hccheck\n"
+            "\n"
+            "\u6280\u672f\u6808: Python + Playwright + Tkinter\n"
+            "\u6d41\u7a0b: \u8f66\u8f86\u68c0\u6d4b \u2192 \u6280\u672f\u5ba1\u6838 \u2192 \u4e1a\u52a1\u5ba1\u6838 \u2192 \u8f66\u8f86\u5e74\u5ba1 \u2192 \u5f52\u6863\n"
+            "\n"
+            "\u00a9 2026 \u8d85\u54e5 18531729777\uff08\u5fae\u4fe1\uff09"
         )
 
     def _on_close(self):
