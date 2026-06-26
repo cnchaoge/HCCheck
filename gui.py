@@ -87,8 +87,8 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title(f"HCCheck {self.VERSION} — 运管站货车审验自动化工具")
-        self.geometry("780x600")
-        self.minsize(680, 520)
+        self.geometry("580x600")
+        self.minsize(500, 520)
 
         # 自动居中
         self.update_idletasks()
