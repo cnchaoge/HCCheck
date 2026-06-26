@@ -1266,6 +1266,17 @@ def get_next_plate_from_list(page: Page) -> Optional[str]:
     ApprovalNo at index 2, Plate at index 7
     """
     main_kef = get_main_kef(page)
+    # [DEBUG] 打印前 2 个 table 的前 3 行列结构（确认列索引是否正确）
+    try:
+        tables_dbg = main_kef.locator(config.SELECTOR_TABLE)
+        for t_idx in range(min(2, tables_dbg.count())):
+            rows_dbg = tables_dbg.nth(t_idx).locator("tbody tr")
+            for r_idx in range(min(3, rows_dbg.count())):
+                cells_dbg = rows_dbg.nth(r_idx).locator("td")
+                contents = [cells_dbg.nth(c).text_content().strip()[:15] for c in range(cells_dbg.count())]
+                print(f"  🔍 [DBG] table{t_idx} 行{r_idx}: {cells_dbg.count()}列 → {contents}")
+    except Exception as e:
+        print(f"  ⚠️ [DBG] 调试日志失败: {e}")
     # 扫描所有 table (可能分多页)
     try:
         tables = main_kef.locator(config.SELECTOR_TABLE)
