@@ -17,6 +17,7 @@ PyInstaller.__main__.run([
     "--add-data", f"{SCRIPT_DIR}{os.pathsep}popups",
     "--hidden-import", "playwright",
     "--hidden-import", "pyperclip",
+    "--upx-exclude", "api-ms-win-*",
     "--clean",
     "--noconfirm",
     os.path.join(SCRIPT_DIR, "gui.py"),  # 入口: GUI
