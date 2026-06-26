@@ -152,19 +152,8 @@ class App(tk.Tk):
         self.notebook.add(self.tab_settings, text="  ⚙ 设置  ")
         self._build_tab_settings(self.tab_settings)
 
-        # ── 底部控制按钮 ──
-        ctrl = ttk.Frame(self)
-        ctrl.pack(fill=tk.X, padx=12, pady=(4, 10))
-
-        self.btn_start = ttk.Button(ctrl, text="▶ 启动", command=self._start, width=14)
-        self.btn_start.pack(side=tk.LEFT, padx=(0, 8))
-
-        self.btn_stop = ttk.Button(ctrl, text="⏹ 停止", command=self._stop, width=14, state=tk.DISABLED)
-        self.btn_stop.pack(side=tk.LEFT, padx=(0, 8))
-
-        ttk.Button(ctrl, text="⚙ 设置",
-                   command=lambda: self.notebook.select(self.tab_settings)).pack(side=tk.RIGHT, padx=(0, 6))
-        ttk.Button(ctrl, text="❓ 关于", command=self._about).pack(side=tk.RIGHT)
+        # ── 底部控制按钮（移到运行 tab） ──
+        # self.btn_start / self.btn_stop 在 _build_tab_run 末尾创建
 
     # --------------------------------------------------------
     # 标签页: 运行
@@ -175,8 +164,6 @@ class App(tk.Tk):
         toolbar.pack(fill=tk.X, pady=(0, 6))
         ttk.Label(toolbar, text="📊 运行状态",
                   font=("Microsoft YaHei", 12, "bold")).pack(side=tk.LEFT)
-        ttk.Button(toolbar, text="⚙ 设置",
-                   command=lambda: self.notebook.select(self.tab_settings)).pack(side=tk.RIGHT)
 
         # ── 状态区 ──
         status_frame = ttk.LabelFrame(parent, text="", padding=8)
@@ -215,6 +202,20 @@ class App(tk.Tk):
         log_btns.pack(fill=tk.X, pady=(4, 0))
         ttk.Button(log_btns, text="🗑 清空日志", command=self._clear_log).pack(side=tk.LEFT)
         ttk.Button(log_btns, text="💾 导出日志", command=self._export_log).pack(side=tk.LEFT, padx=(4, 0))
+
+        # ── 底部控制按钮（启动/停止/关于/设置） ──
+        ctrl = ttk.Frame(parent)
+        ctrl.pack(fill=tk.X, pady=(6, 0))
+
+        self.btn_start = ttk.Button(ctrl, text="▶ 启动", command=self._start, width=14)
+        self.btn_start.pack(side=tk.LEFT, padx=(0, 8))
+
+        self.btn_stop = ttk.Button(ctrl, text="⏹ 停止", command=self._stop, width=14, state=tk.DISABLED)
+        self.btn_stop.pack(side=tk.LEFT, padx=(0, 8))
+
+        ttk.Button(ctrl, text="❓ 关于", command=self._about).pack(side=tk.RIGHT, padx=(0, 6))
+        ttk.Button(ctrl, text="⚙ 设置",
+                   command=lambda: self.notebook.select(self.tab_settings)).pack(side=tk.RIGHT)
 
     # --------------------------------------------------------
     # 标签页: 设置
