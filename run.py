@@ -1334,8 +1334,19 @@ def main() -> None:
     if SKIP_PLATES:
         print(f"🚫 加载黑名单: {len(SKIP_PLATES)} 辆车")
     with sync_playwright() as p:
-        browser = p.chromium.launch(channel="chrome", headless=config.HEADLESS)
-        context = browser.new_context(viewport={"width": 1600, "height": 900})
+        # 使用持久化 profile (记住 USB Key 等权限授权，免去每次启动手动点'允许')
+        user_data_dir = os.path.join(config.get_user_data_dir(), "chrome_profile")
+        context = p.chromium.launch_persistent_context(
+            user_data_dir,
+            channel="chrome",
+            headless=config.HEADLESS,
+            viewport={"width": 1600, "height": 900},
+            args=[
+                "--disable-notifications",
+                "--disable-popup-blocking",
+                "--no-default-browser-check",
+            ],
+        )
         page = context.new_page()
         page.on("pageerror", lambda e: _filter_page_error(e))
         # 自动处理所有对话框(如confirm、alert、prompt"),吃掉关闭后的异常
