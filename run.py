@@ -204,7 +204,7 @@ def get_contents(page):
 
 
 # ========= 登录 + 导航 =========
-def wait_for_login_and_navigate(page: Page, username: str = "", password: str = "", auto_submit: bool = False):
+def wait_for_login_and_navigate(page: Page, username: str = "", password: str = "", auto_submit: bool = False) -> None:
     page.goto(config.URL, wait_until="domcontentloaded")
     pa(1)
 
@@ -1065,7 +1065,7 @@ def _detect_popup_step(popup, page=None):
     return "unknown"
 
 # ========= 两条流程 =========
-def process_unmarked(page: Page, plate: str, run_from_step: Optional[str] = None, processed: int = 0):
+def process_unmarked(page: Page, plate: str, run_from_step: Optional[str] = None, processed: int = 0) -> None:
     """不带挂:popup1 车辆检测 → popup2 技术 → popup3 业务 → popup4 年审 → popup5 归档
     工作台节点驱动: 每完成一个 popup 后重读工作台,决定下一步
     """
@@ -1131,7 +1131,7 @@ def process_unmarked(page: Page, plate: str, run_from_step: Optional[str] = None
 
     print(f"  ✅ {plate} 流程结束")
 
-def process_marked(page: Page, plate: str, run_from_step: Optional[str] = None, processed: int = 0):
+def process_marked(page: Page, plate: str, run_from_step: Optional[str] = None, processed: int = 0) -> None:
     """带挂流程: 业务岗位审核 → 车辆年审 → 归档 (3 个 popup)
     工作台节点驱动: 每完成一个 popup 后重读工作台,决定下一步
     """
@@ -1244,7 +1244,7 @@ def _phase2_finish(popup, page):
         pass
     pa(2)
 
-def dispatch(page: Page, plate: str, run_from_step: Optional[str] = None, processed: int = 0):
+def dispatch(page: Page, plate: str, run_from_step: Optional[str] = None, processed: int = 0) -> None:
     # 通知 GUI：当前正在处理 plate
     config.CURRENT_PLATE = plate
     push_status(plate=plate, step="启动中", done=processed)
@@ -1316,6 +1316,34 @@ def get_next_plate_from_list(page: Page) -> Optional[str]:
         except:
             pass
     return None
+
+
+# ========= table 扫描 helper (优化方案 Step 2.4) =========
+def extract_plates_from_table(rows_locator, skip_plates=None):
+    """从 rows locator 中提取所有车牌 + 对应的行文本
+
+    应用场景:
+    - main() 工作台扫描 (rows_locator = main_kef.locator(SELECTOR_TABLE_ROW))
+    - 可复用于任何需要"从 table 拿所有车牌"的场景
+
+    Returns: [(plate, row_full_text), ...] — 按行顺序,每行只返回第一个匹配的车牌
+    """
+    if skip_plates is None:
+        skip_plates = SKIP_PLATES
+    results = []
+    try:
+        for r in range(rows_locator.count()):
+            cells = rows_locator.nth(r).locator("td")
+            row_texts = [cells.nth(j).text_content().strip() for j in range(cells.count())]
+            row_full = " ".join(row_texts)
+            for t in row_texts:
+                if config.PLATE_RE.match(t) and t not in skip_plates:
+                    results.append((t, row_full))
+                    break
+    except:
+        pass
+    return results
+
 
 # ========= 主流程 =========
 def _filter_page_error(err):
@@ -1462,31 +1490,25 @@ def main() -> None:
                 workbench_plates = []  # [(plate, current_node, flow_name), ...]
                 try:
                     rows = main_kef.locator(config.SELECTOR_TABLE_ROW)
-                    for r in range(rows.count()):
-                        cells = rows.nth(r).locator("td")
-                        row_texts = [cells.nth(j).text_content().strip() for j in range(cells.count())]
-                        row_full = " ".join(row_texts)
-                        # 找车牌号
-                        for t in row_texts:
-                            if config.PLATE_RE.match(t) and t not in SKIP_PLATES:
-                                current_node = ""
-                                if config.NODE_TECH_REVIEW in row_full:
-                                    current_node = config.NODE_TECH_REVIEW
-                                elif config.NODE_VEHICLE_CHECK in row_full:
-                                    current_node = config.NODE_VEHICLE_CHECK
-                                elif config.NODE_BUSINESS_REVIEW in row_full:
-                                    current_node = config.NODE_BUSINESS_REVIEW
-                                elif config.NODE_VEHICLE_ANNUAL in row_full:
-                                    current_node = config.NODE_VEHICLE_ANNUAL
-                                elif config.NODE_ARCHIVE in row_full:
-                                    current_node = config.NODE_ARCHIVE
-                                # 检查是否带挂流程 (车牌含“挂”字也算带挂)
-                                if config.FLOW_TRAILER_MARKER in row_full or "(普货)" in row_full or "挂" in t:
-                                    flow_name = config.FLOW_TRAILER_MARKER
-                                else:
-                                    flow_name = config.FLOW_NORMAL_MARKER
-                                workbench_plates.append((t, current_node, flow_name))
+                    for t, row_full in extract_plates_from_table(rows):
+                        # 提取当前节点(按优先级匹配,匹配到第一个就 break)
+                        current_node = ""
+                        for node_const in (
+                            config.NODE_TECH_REVIEW,
+                            config.NODE_VEHICLE_CHECK,
+                            config.NODE_BUSINESS_REVIEW,
+                            config.NODE_VEHICLE_ANNUAL,
+                            config.NODE_ARCHIVE,
+                        ):
+                            if node_const in row_full:
+                                current_node = node_const
                                 break
+                        # 检查是否带挂流程 (车牌含“挂”字也算带挂)
+                        if config.FLOW_TRAILER_MARKER in row_full or "(普货)" in row_full or "挂" in t:
+                            flow_name = config.FLOW_TRAILER_MARKER
+                        else:
+                            flow_name = config.FLOW_NORMAL_MARKER
+                        workbench_plates.append((t, current_node, flow_name))
                 except:
                     pass
 
