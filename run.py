@@ -188,7 +188,7 @@ def goto_workbench(page):
     contents = get_contents(page)
     try:
         safe(contents.get_by_role("link", name=config.MENU_WORKBENCH), timeout=5000).click()
-        pa(2)
+        pa(config.PA_AFTER_CLICK)
     except:
         pass
 
@@ -206,7 +206,7 @@ def get_contents(page):
 # ========= 登录 + 导航 =========
 def wait_for_login_and_navigate(page: Page, username: str = "", password: str = "", auto_submit: bool = False) -> None:
     page.goto(config.URL, wait_until="domcontentloaded")
-    pa(1)
+    pa(config.PA_AFTER_MENU)
 
     print("=" * 50)
     print("  运管站货车审验自动化系统")
@@ -263,7 +263,7 @@ def wait_for_login_and_navigate(page: Page, username: str = "", password: str = 
                 safe_input("  >>> 登录完成后按回车键继续... ")
                 return
 
-            pa(0.5)
+            pa(config.PA_SHORT)
 
             # 填密码
             pass_filled = False
@@ -283,7 +283,7 @@ def wait_for_login_and_navigate(page: Page, username: str = "", password: str = 
                 safe_input("  >>> 登录完成后按回车键继续... ")
                 return
 
-            pa(0.5)
+            pa(config.PA_SHORT)
 
             # 点登录按钮
             if auto_submit:
@@ -293,12 +293,12 @@ def wait_for_login_and_navigate(page: Page, username: str = "", password: str = 
                         if el.is_visible(timeout=2000):
                             el.click()
                             print(f"  ✓ 已点击登录按钮 (selector: {sel})")
-                            pa(3)
+                            pa(config.PA_AFTER_NAV)
                             break
                     except:
                         continue
                 print("  · 等待登录完成...")
-                pa(3)
+                pa(config.PA_AFTER_NAV)
             else:
                 print("  · 账号密码已填入，等待手动点登录...")
                 safe_input("  >>> 登录完成后按回车键继续... ")
@@ -334,12 +334,12 @@ def wait_for_login_and_navigate(page: Page, username: str = "", password: str = 
         try:
             safe(contents.get_by_role("link", name=config.MENU_WORKBENCH), timeout=8000).click()
             print("✅ 已切换到 [工作台]")
-            pa(2)
+            pa(config.PA_AFTER_CLICK)
             break
         except Exception as e:
             if _retry < 2:
                 print(f"  调试 - 工作台点击失败,等 3s 重试 ({_retry + 1}/3): {e}")
-                pa(3)
+                pa(config.PA_AFTER_NAV)
             else:
                 print(f"⚠️ [工作台] 点击失败（重试 3 次都失败）: {e}")
 
@@ -382,11 +382,11 @@ def _check_workbench_for_task(page, plate):
                             cells.nth(c).locator("a").first.click()
                         popup = page_info.value
                         print(f"  → 捕获到新窗口")
-                        pa(2)
+                        pa(config.PA_AFTER_CLICK)
                         return True, popup, step_name
                     except:
                         # 超时: 可能弹窗没响应,再查一次
-                        pa(3)
+                        pa(config.PA_AFTER_POPUP)
                         existing = _get_existing_popup(page)
                         if existing:
                             print(f"  → 弹窗已存在(延迟检测)")
@@ -452,7 +452,7 @@ def open_task_popup(page, plate):
                         links.nth(i).click(force=True)
                     return page_info.value
                 except:
-                    pa(3)
+                    pa(config.PA_AFTER_POPUP)
                     existing = _get_existing_popup(page)
                     if existing:
                         return existing
@@ -481,7 +481,7 @@ def _phase1_select_and_create(page, plate, menu_name):
         safe(main_kef.get_by_role("link", name=config.BTN_ADD), timeout=3000).click()
     except:
         pass
-    pa(1)
+    pa(config.PA_AFTER_MENU)
 
     # 点菜单 → 用 expect_event 捕获新窗口
     pages_before = len(page.context.pages)
@@ -494,21 +494,21 @@ def _phase1_select_and_create(page, plate, menu_name):
         # expect_event 超时, fallback 忙等
         print("  → expect_event 超时, fallback 忙等...")
         safe(main_kef.get_by_role("link", name=menu_name)).click()
-        pa(2)
+        pa(config.PA_AFTER_CLICK)
         popup1 = None
         for _ in range(20):
             if len(page.context.pages) > pages_before:
                 popup1 = page.context.pages[-1]
                 break
-            pa(0.5)
+            pa(config.PA_SHORT)
     if not popup1:
         raise Exception("Phase1: 菜单弹窗未出现")
     print(f"  → 弹窗开")
-    pa(1.5)
+    pa(config.PA_AFTER_QUERY)
 
     # 选车
     safe(popup1.get_by_role("link", name=config.BTN_SELECT)).click()
-    pa(1.5)
+    pa(config.PA_AFTER_QUERY)
 
     diag   = popup1.frame_locator(config.SELECTOR_IFRAME_SUBMIT_DIAGCL)
     find   = diag.frame_locator(config.SELECTOR_FRAME_FIND_FRAME_KF)
@@ -516,7 +516,7 @@ def _phase1_select_and_create(page, plate, menu_name):
 
     inp = safe(find.locator(config.INPUT_LICENSE_PLATE))
     paste_into(inp, plate)
-    pa(1)
+    pa(config.PA_AFTER_MENU)
 
     try:
         safe(find.locator(config.SELECTOR_FLOW_ID), timeout=3000).select_option(config.FLOW_TYPE_ID)
@@ -530,10 +530,10 @@ def _phase1_select_and_create(page, plate, menu_name):
             break
         except:
             continue
-    pa(1.5)
+    pa(config.PA_AFTER_QUERY)
 
     # 选中查询结果 - 尝试多种方式
-    pa(1)
+    pa(config.PA_AFTER_MENU)
     _selected = False
     # 方式0 (优先级最高): 直接用 popup1.frames 拿 main_kef 点 radio
     for f in popup1.frames:
@@ -591,7 +591,7 @@ def _phase1_select_and_create(page, plate, menu_name):
     if not _selected:
         print("  ⚠️ 未找到可勾选的 checkbox,请手动勾选后按回车")
         safe_input(">>> 勾选后按回车继续...")
-    pa(1)
+    pa(config.PA_AFTER_MENU)
 
     # 点击"确定"按钮 - 尝试多个 frame 位置 (容错)
     _ok_clicked = False
@@ -675,7 +675,7 @@ def _phase1_select_and_create(page, plate, menu_name):
                 print(f"  ❌ JS 全局查找异常: {e}")
             if not _ok_clicked:
                 print("  ❌ 确定按钮点击失败")
-    pa(1.5)
+    pa(config.PA_AFTER_QUERY)
     try:
         safe(popup1.get_by_role("link", name=config.BTN_START_TASK), timeout=3000).click(force=True)
         print(f"  ✓ 点击'创建任务(R)'成功 (force)")
@@ -687,9 +687,9 @@ def _phase1_select_and_create(page, plate, menu_name):
         except Exception as e2:
             print(f"  ❌ 创建任务点击失败: {e2}")
             raise
-    pa(3)
-    pa(2)
-    pa(3)  # 等工作台更新，避免 process_marked 读工作台时还是旧数据
+    pa(config.PA_AFTER_NAV)
+    pa(config.PA_AFTER_CLICK)
+    pa(config.PA_AFTER_NAV)  # 等工作台更新，避免 process_marked 读工作台时还是旧数据
 
     # 🆕 检测“不能创建流程”对话框(业务规则:车辆有未完成旧流程)
     if _CREATE_BLOCKED_DIALOG:
@@ -721,7 +721,7 @@ def _click_expand_freight_manage(contents):
         freight_row = contents.locator(f"a:has-text('{config.MENU_FREIGHT_MANAGE}')").locator("..").locator("img")
         if freight_row.count() > 0:
             freight_row.first.click()
-            pa(1)
+            pa(config.PA_AFTER_MENU)
             # 验证是否展开
             try:
                 contents.get_by_text(config.MENU_NORMAL_REVIEW).first.wait_for(state="visible", timeout=2000)
@@ -737,7 +737,7 @@ def _click_expand_freight_manage(contents):
         link = contents.get_by_role("link", name=config.MENU_FREIGHT_MANAGE)
         if link.count() > 0:
             link.first.click(force=True)
-            pa(1)
+            pa(config.PA_AFTER_MENU)
             try:
                 contents.get_by_text(config.MENU_NORMAL_REVIEW).first.wait_for(state="visible", timeout=2000)
                 print(f"  ✅ 点文字展开成功")
@@ -750,7 +750,7 @@ def _click_expand_freight_manage(contents):
     # 策略3: JS 强制点击文字
     try:
         contents.locator(f'a:has-text("{config.MENU_FREIGHT_MANAGE}")').first.evaluate("el => el.click()")
-        pa(1)
+        pa(config.PA_AFTER_MENU)
         try:
             contents.get_by_text(config.MENU_NORMAL_REVIEW).first.wait_for(state="visible", timeout=2000)
             print(f"  ✅ JS 展开成功")
@@ -765,7 +765,7 @@ def _click_expand_freight_manage(contents):
         freight_row = contents.locator(f"a:has-text('{config.MENU_FREIGHT_MANAGE}')").locator("..").locator("img")
         if freight_row.count() > 0:
             freight_row.first.click()
-            pa(2)
+            pa(config.PA_AFTER_CLICK)
     except:
         pass
 
@@ -823,7 +823,7 @@ def _get_existing_popup(page):
         try:
             u = (p.url or "").lower()
             if "workflow" in u:
-                pa(2)
+                pa(config.PA_AFTER_CLICK)
                 return p
         except:
             continue
@@ -840,7 +840,7 @@ def _wait_popup_with_hint(page, hint="请手动点车牌打开弹窗"):
     contents = get_contents(page)
     try:
         safe(contents.get_by_role("link", name=config.MENU_WORKBENCH), timeout=5000).click()
-        pa(2)
+        pa(config.PA_AFTER_CLICK)
     except:
         print("  工作台链接找不到,假设已在工作台")
 
@@ -860,12 +860,12 @@ def _wait_popup_with_hint(page, hint="请手动点车牌打开弹窗"):
                         links.nth(i).click(force=True)
                     popup = page_info.value
                     print(f"  → 捕获到新窗口: {link_clicked}")
-                    pa(2)
+                    pa(config.PA_AFTER_CLICK)
                     return popup
                 except Exception as e:
                     print(f"  ⚠️ expect_event 超时: {e}")
                     # 超时, fallback
-                    pa(3)
+                    pa(config.PA_AFTER_POPUP)
                     existing = _get_existing_popup(page)
                     if existing:
                         print(f"  → 弹窗已存在(延迟检测)")
@@ -880,13 +880,13 @@ def _wait_popup_with_hint(page, hint="请手动点车牌打开弹窗"):
     if link_clicked:
         print(f"  ⏳ 已点车牌 {link_clicked} 但弹窗未出现")
     safe_input(">>> 按回车继续...")
-    pa(5)  # 多等一会
+    pa(config.PA_LONG)  # 多等一会
     popup = _get_existing_popup(page)
     if popup:
         print("  → 接管手动打开的popup")
         return popup
     # 再查一次
-    pa(3)
+    pa(config.PA_AFTER_POPUP)
     popup = _get_existing_popup(page)
     if popup:
         return popup
@@ -904,18 +904,18 @@ def _close_all_popups(page):
                 pass
     if closed:
         print(f"  清理 {closed} 个残留弹窗")
-    pa(1)
+    pa(config.PA_AFTER_MENU)
 
 def _advance_to_next_popup(page, prev_popup, hint="请手动点车牌打开弹窗"):
     """等待下一个业务弹窗出现
     策略: 系统完成后会从过渡页打开新弹窗,需要用 expect_event 等待
     """
     # 主动点工作台任务链接 (这是系统跳转业务弹窗的常规方式)
-    pa(2)
+    pa(config.PA_AFTER_CLICK)
     try:
         contents = get_contents(page)
         safe(contents.get_by_role("link", name=config.MENU_WORKBENCH), timeout=5000).click()
-        pa(2)
+        pa(config.PA_AFTER_CLICK)
         print(f"  调试 - 已切到工作台")
     except Exception as e:
         print(f"  调试 - 切工作台失败: {e}")
@@ -1002,7 +1002,7 @@ def _detect_popup_step(popup, page=None):
 
     # 先等弹窗 URL 稳定 (避免拿到上一页面的残留)
     print(f"  调试 - 弹窗 URL: {popup.url[:80]}")
-    pa(5)  # 多等 5 秒, 让系统跳转完成
+    pa(config.PA_LONG)  # 多等 5 秒, 让系统跳转完成
     # 增加超时次数 (原 8 次 = 8 秒, 新 20 次 = 20 秒)
     for attempt in range(30):
         # 重新从 context.pages 拿最新的活的 workflow 页面 (避免过期引用)
@@ -1060,7 +1060,7 @@ def _detect_popup_step(popup, page=None):
         except Exception as e:
             if attempt < 3:
                 print(f"  调试 - 检测异常 (attempt={attempt}): {e}")
-        pa(1)
+        pa(config.PA_AFTER_MENU)
     print(f"  ⚠️ 检测超时, 返回 unknown")
     return "unknown"
 
@@ -1124,7 +1124,7 @@ def process_unmarked(page: Page, plate: str, run_from_step: Optional[str] = None
         step_handlers[current_node](popup)
 
         # 完成后系统会自动关闭 popup,下一轮循环会重新读工作台
-        pa(5)  # 等工作台异步更新（pa(2) 太短,服务器还没推）
+        pa(config.PA_LONG)  # 等工作台异步更新（pa(2) 太短,服务器还没推）
         # 如果是归档,提前返回（避免循环剩下的空转,完成消息由主循环打）
         if current_node == config.STEP_ARCHIVE:
             return
@@ -1181,7 +1181,7 @@ def process_marked(page: Page, plate: str, run_from_step: Optional[str] = None, 
         step_handlers[current_node](popup)
 
         # 完成后系统会自动关闭 popup
-        pa(5)  # 等工作台异步更新（pa(2) 太短,服务器还没推）
+        pa(config.PA_LONG)  # 等工作台异步更新（pa(2) 太短,服务器还没推）
         popup = None  # 下轮循环重新开
 
         # 如果是归档,提前返回（避免循环剩下的空转,完成消息由主循环打）
@@ -1219,13 +1219,13 @@ def _handle_year_check_first(popup, context, plate):
                 continue
     else:
         print("  ⚠️ 年度审验找不到")
-    pa(1.5)
+    pa(config.PA_AFTER_QUERY)
     try:
         safe(wf.get_by_role("button", name=config.BTN_SUBMIT), timeout=5000).click()
         print("  ✓ 点击提交")
     except:
         print("  ⚠️ 提交按钮找不到")
-    pa(2)
+    pa(config.PA_AFTER_CLICK)
     do_dialog(popup,
               action_type=config.ACTION_SUBMIT_YEAR_CHECK,
               category=config.CATEGORY_ROLE)
@@ -1233,16 +1233,16 @@ def _handle_year_check_first(popup, context, plate):
 
 def _phase2_finish(popup, page):
     # 等 dialog 监听器消化完归档后的 confirm 弹窗
-    pa(1)
+    pa(config.PA_AFTER_MENU)
     try: popup.close()
     except: pass
-    pa(1)
+    pa(config.PA_AFTER_MENU)
     contents = get_contents(page)
     try:
         safe(contents.get_by_role("link", name=config.MENU_NORMAL_REVIEW), timeout=8000).click()
     except:
         pass
-    pa(2)
+    pa(config.PA_AFTER_CLICK)
 
 def dispatch(page: Page, plate: str, run_from_step: Optional[str] = None, processed: int = 0) -> None:
     # 通知 GUI：当前正在处理 plate
@@ -1565,7 +1565,7 @@ def main() -> None:
                             if fc >= config.MAX_FAIL:
                                 _add_to_skip_plates(plate)  # 🆕 自动保存到磁盘
                                 print(f"  ⏭ {plate} 已加入黑名单,不再自动重试")
-                        pa(1.5)
+                        pa(config.PA_AFTER_QUERY)
                     continue  # 跑完所有任务后回到顶部重新检查工作台
 
                 # === 第三步: 工作台空, 去列表取新车 ===
@@ -1575,11 +1575,11 @@ def main() -> None:
                 try:
                     # 多重策略点击货运管理展开按钮
                     _click_expand_freight_manage(contents)
-                    pa(2)
+                    pa(config.PA_AFTER_CLICK)
 
                     # 点普货审验 (增加文本定位兑底,解决 role 定位超时)
                     _click_normal_review_link(contents)
-                    pa(2)
+                    pa(config.PA_AFTER_CLICK)
 
                     # 验证 main_kef 是否真的切到了普货审验列表
                     if not _verify_in_normal_review(page):
@@ -1587,7 +1587,7 @@ def main() -> None:
                             print(f"  ⚠️ 验证未切到普货审验, 重试点击...")
                         # 再试一次
                         _click_normal_review_link(contents)
-                        pa(2)
+                        pa(config.PA_AFTER_CLICK)
                 except Exception as e:
                     print(f"  普货审验自动导航失败: {e}")
                     safe_input("  >>> 请手动点左侧[普货审验],然后按回车...")
@@ -1599,7 +1599,7 @@ def main() -> None:
 
                 if plate in SKIP_PLATES:
                     print(f"  ⏭ 跳过 {plate} (已被拉黑)")
-                    pa(1)
+                    pa(config.PA_AFTER_MENU)
                     continue
 
                 processed += 1
@@ -1643,7 +1643,7 @@ def main() -> None:
                     if fc >= config.MAX_FAIL:
                         _add_to_skip_plates(plate)  # 🆕 自动保存到磁盘
                         print(f"  ⏭ {plate} 已加入黑名单,不再自动重试")
-                pa(1.5)
+                pa(config.PA_AFTER_QUERY)
 
                 if config.SINGLE_RUN:
                     print("\n  🛑 单次模式,已处理 1 辆,停止")
