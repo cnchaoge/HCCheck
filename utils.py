@@ -172,7 +172,7 @@ def paste_into(locator, text):
     """优先用剪贴板粘贴(绕过 input 事件),pyperclip 不可用时 fallback fill"""
     if pyperclip:
         pyperclip.copy(text)
-        pa(0.15)
+        pa(config.PA_VERY_SHORT)
         locator.click()
         pa(0.1)
         locator.press("ControlOrMeta+a")
