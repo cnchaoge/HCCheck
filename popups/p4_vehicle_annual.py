@@ -27,7 +27,8 @@ def handle(popup, context, plate,
     _click_plate_link(popup, plate)
 
     # 用 3 个策略找"年度审验"链接
-    clicked = _click_year_check(popup, max_retry=2)
+    # 🆕 传 context 让 retry 期间能清理残留弹窗 (修复 #4)
+    clicked = _click_year_check(popup, context, max_retry=2)
 
     if not clicked:
         print("  ⚠️ 找不到年度审验链接,手动点击后按回车")
@@ -80,6 +81,43 @@ def _click_plate_link(popup, plate):
         pass
 
 
+# ========= popup4 retry 残留弹窗清理 (优化方案 #4) =========
+def _close_residual_popups(context, exclude_popup):
+    """关掉 popup4 进入前的残留弹窗 page,只保留当前 popup
+
+    背景:popup4 retry 等待时,submitDiag iframe alert 可能被 dialog handler
+    自动处理,但**新弹窗 (page 级别) 残留**会导致 retry 时 popup 不是干净状态。
+    2026-06-24 12:30 实跑 17 辆时偶发此问题。
+    """
+    closed = 0
+    try:
+        for p in context.pages:
+            if p == exclude_popup:
+                continue
+            try:
+                p.close()
+                closed += 1
+            except:
+                pass
+    except:
+        pass
+    return closed
+
+
+def _wait_residual_cleared(context, exclude_popup, timeout=3.0, poll=0.3):
+    """智能等待残留弹窗被清理完(只剩当前 popup)"""
+    def _only_excluded():
+        try:
+            return len(context.pages) == 1
+        except:
+            return False
+    try:
+        wait_until(_only_excluded, timeout=timeout, poll=poll, description="残留弹窗清理")
+    except TimeoutError:
+        # 超时不致命,retry 仍可继续
+        pass
+
+
 def _any_year_check_visible(popup):
     """检查 popup 任何 frame 里是否有"年度审验"链接可见（轮询条件用）
 
@@ -109,8 +147,18 @@ def _any_year_check_visible(popup):
     return False
 
 
-def _click_year_check(popup, max_retry=2):
-    """点"年度审验"链接,带重试和智能等待（替代 pa(3)）"""
+def _click_year_check(popup, context=None, max_retry=2):
+    """点"年度审验"链接,带重试和智能等待（替代 pa(3)）
+
+    🆕 修复 #4: 进入前清理残留弹窗 (popup3 或更早传下来的 submitDiag 残留)
+    """
+    # 🆕 进入前先清理残留弹窗,确保从干净状态开始 retry
+    if context is not None:
+        closed = _close_residual_popups(context, popup)
+        if closed:
+            print(f"  🧹 清理 {closed} 个残留弹窗 (popup4 入口)")
+        _wait_residual_cleared(context, popup)
+
     for attempt in range(max_retry):
         # 3 个策略依次尝试
         clicked = _click_year_check_via_frames(popup)
