@@ -1328,7 +1328,76 @@ def _filter_page_error(err):
     print(f"  ⚠️ 页面错误: {msg}")
 
 
+# ========= 启动清理 (优化方案 #3) =========
+def _validate_json_files():
+    """启动时验证 skip_plates.json / user_config.json 格式
+
+    损坏则备份成 .broken.YYYYMMDD-HHMMSS + 删除,下次启动从空配置开始
+    返回:成功验证的文件数
+    """
+    validated = 0
+    for path, label in [
+        (config.SKIP_PLATES_FILE, "skip_plates.json"),
+        (config.USER_CONFIG_FILE, "user_config.json"),
+    ]:
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                json.load(f)  # 仅验证格式,不读取
+            validated += 1
+        except (json.JSONDecodeError, ValueError, OSError) as e:
+            # 损坏 → 备份 + 删除
+            backup = f"{path}.broken.{_time.strftime('%Y%m%d-%H%M%S')}"
+            try:
+                os.rename(path, backup)
+                print(f"  ⚠️ {label} 损坏({e}),已备份: {os.path.basename(backup)}")
+            except OSError:
+                # 备份失败,尝试直接删除(避免每次启动都报错)
+                try:
+                    os.remove(path)
+                    print(f"  ⚠️ {label} 损坏({e}),已删除")
+                except:
+                    pass
+    return validated
+
+
+def _cleanup_temp_files(max_age_days=7):
+    """清理超过 N 天的截图临时文件
+
+    返回:清理的文件数
+    """
+    cleaned = 0
+    try:
+        screenshot_dir = os.path.join(config.get_user_data_dir(), "screenshots")
+        if not os.path.exists(screenshot_dir):
+            return 0
+        cutoff = _time.time() - max_age_days * 86400
+        for name in os.listdir(screenshot_dir):
+            fp = os.path.join(screenshot_dir, name)
+            try:
+                if not os.path.isfile(fp):
+                    continue
+                if os.path.getmtime(fp) < cutoff:
+                    os.remove(fp)
+                    cleaned += 1
+            except OSError:
+                pass
+    except Exception as e:
+        if config.DEBUG:
+            print(f"  调试 - 清理临时文件失败: {e}")
+    return cleaned
+
+
 def main() -> None:
+    # 🆕 启动清理 (优化方案 #3)
+    print("🧹 启动清理...")
+    validated = _validate_json_files()
+    print(f"  ✅ 验证 {validated} 个配置文件格式")
+    cleaned = _cleanup_temp_files()
+    if cleaned:
+        print(f"  ✅ 清理 {cleaned} 个过期临时文件 (超过 7 天)")
+
     # 启动时加载黑名单（从磁盘）
     SKIP_PLATES.update(_load_skip_plates())
     if SKIP_PLATES:
