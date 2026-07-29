@@ -40,7 +40,7 @@ def handle(popup, context, plate,
             pass
 
     # 点完链接后短间隔,让页面就位
-    pa(2)
+    pa(config.PA_AFTER_CLICK)
 
     # 提交
     try:
@@ -62,7 +62,7 @@ def handle(popup, context, plate,
             print("  ✓ 点击提交")
     except Exception as e:
         print(f"  ⚠️ 提交按钮找不到 ({e})")
-    pa(2)
+    pa(config.PA_AFTER_CLICK)
     do_dialog(popup, action_type=action_type, category=category)
     step("车辆年审: 完成 ✅")
 
@@ -75,7 +75,7 @@ def _click_plate_link(popup, plate):
         if plate_link.count() > 0:
             plate_link.first.click()
             print("  ✓ 点击车牌链接")
-            pa(1.5)
+            pa(config.PA_AFTER_QUERY)
     except:
         # 没有车牌链接就跳过(不影响主流程)
         pass

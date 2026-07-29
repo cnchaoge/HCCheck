@@ -199,12 +199,12 @@ def _close_print_preview(context, pages_before):
         for p in context.pages:
             try:
                 p.keyboard.press("Escape")
-                pa(0.3)
+                pa(config.PA_SHORT)
                 p.keyboard.press("Escape")
-                pa(0.3)
+                pa(config.PA_SHORT)
                 # Ctrl+W 关 tab
                 p.keyboard.press("Control+w")
-                pa(0.3)
+                pa(config.PA_SHORT)
             except:
                 pass
         # 再 check 一遍 pages 数量
@@ -234,7 +234,7 @@ def handle(popup, context, main_page, plate):
         if plate_link.count() > 0:
             plate_link.first.click()
             print("  ✓ 点击车牌链接")
-            pa(1)
+            pa(config.PA_AFTER_MENU)
     except:
         # 没有车牌链接就跳过
         pass
@@ -294,9 +294,9 @@ def handle(popup, context, main_page, plate):
                     print("  ⚠️ stdin 不可用,跳过")
 
     # 关闭 Lodop 打印预览 (可能是新窗口/标签页)
-    pa(2)
+    pa(config.PA_AFTER_CLICK)
     _close_print_preview(context, pages_before)
-    pa(1)
+    pa(config.PA_AFTER_MENU)
 
     # 🆕 恢复默认打印 dialog 行为
     if cdp_session:
@@ -310,7 +310,7 @@ def handle(popup, context, main_page, plate):
     # 提交 + 选下一处理人
     try:
         safe(wf.get_by_role("button", name=config.BTN_SUBMIT), timeout=5000).click()
-        pa(2)
+        pa(config.PA_AFTER_CLICK)
         do_dialog(
             popup,
             action_type=config.ACTION_SUBMIT_TECH_REVIEW,

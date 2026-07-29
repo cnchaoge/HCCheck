@@ -36,6 +36,6 @@ def handle(popup, plate):
         print(f"  ⚠️ 提交按钮点不上 ({e}), 可能带挂流程需要手动选动作类型")
         print(f"  👆 请手动点提交后按回车")
         input(">>> 点完后按回车继续...")
-    pa(2)
+    pa(config.PA_AFTER_CLICK)
     do_dialog(popup, action_type=None, category=config.CATEGORY_ROLE)
     step("车辆检测: 完成 ✅")

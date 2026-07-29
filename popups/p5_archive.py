@@ -15,16 +15,16 @@ def handle(popup, main_page, plate):
     safe(wf.get_by_role("button", name=config.BTN_COMPLETE)).click()
 
     # 点"确定"弹窗(可能多个,由 dialog 监听器和元素点击双重保障)
-    pa(2)
+    pa(config.PA_AFTER_CLICK)
     for i in range(3):
         try:
             btn = wf.get_by_role("button", name=config.BTN_OK)
             safe(btn, timeout=2000).click()
             print(f"  归档弹窗: 确定({i+1})")
-            pa(1)
+            pa(config.PA_AFTER_MENU)
         except:
             break
 
-    pa(2)
+    pa(config.PA_AFTER_CLICK)
     print(f"  ✓ 归档完成 🎉")
     step("归档: 完成 ✅")

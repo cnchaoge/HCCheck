@@ -22,7 +22,7 @@ def handle(popup, context, plate, action_type=config.ACTION_SUBMIT_VEHICLE_ANNUA
     except:
         print("  ⚠️ 提交按钮找不到,尝试在流程页面中点车牌")
         _click_plate_link_in_wf(context, wf, plate)
-    pa(2)
+    pa(config.PA_AFTER_CLICK)
     do_dialog(popup, action_type=action_type, category=config.CATEGORY_ROLE)
     step("业务岗位审核: 完成 ✅")
 
