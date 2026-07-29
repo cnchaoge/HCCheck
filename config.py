@@ -34,6 +34,9 @@ USER_CONFIG_FILE = os.path.join(get_user_data_dir(), "user_config.json")
 # 黑名单车牌文件路径（同样位于用户数据目录）
 SKIP_PLATES_FILE = os.path.join(get_user_data_dir(), "skip_plates.json")
 
+# SQLite 处理结果数据库 (替代旧的 xlsx 累积)
+DB_FILE = os.path.join(get_user_data_dir(), "hccheck.db")
+
 # ========= 运行控制 =========
 DEBUG = False            # True: 每步按 y 才走
 SINGLE_RUN = False       # True: 跑完一辆就停

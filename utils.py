@@ -4,6 +4,7 @@
 """
 import sys
 import time
+import os
 
 try:
     import pyperclip
@@ -184,11 +185,20 @@ def paste_into(locator, text):
 
 
 def screenshot_on_error(page, label):
-    """出错时截图到当前目录,失败也不影响流程"""
+    """出错时截图到 screenshots/ 目录,失败也不影响流程
+
+    写到 user_data_dir/screenshots/ 而不是当前目录,便于:
+    - 集中管理(跟启动清理逻辑统一)
+    - _cleanup_temp_files() 可以按 7 天自动清理
+    - 避免当前目录堆积 err_*.png
+    """
     try:
+        import config as _cfg
+        screenshot_dir = os.path.join(_cfg.get_user_data_dir(), "screenshots")
+        os.makedirs(screenshot_dir, exist_ok=True)
         ts = time.strftime("%H%M%S")
-        path = f"err_{label}_{ts}.png"
+        path = os.path.join(screenshot_dir, f"err_{label}_{ts}.png")
         page.screenshot(path=path)
-        print(f"  📸 {path}")
+        print(f"  📸 {os.path.basename(path)}")
     except Exception as sce:
         print(f"  ⚠️ 截图失败: {sce}")
