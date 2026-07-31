@@ -185,7 +185,7 @@ def test_7_gui_loading():
                 if isinstance(target, ast.Name) and target.id == "VERSION":
                     version = node.value.value
                     break
-    assert version == "v1.2.0", f"VERSION 应为 v1.2.0, 实际 {version}"
+    assert version == "v1.2.1", f"VERSION 应为 v1.2.1, 实际 {version}"
     print(f"  ✅ App.VERSION = {version}")
 
     # 验证 import
@@ -226,6 +226,38 @@ def test_8_tab_order():
     return True
 
 
+def test_9_no_tkinter_typos():
+    """测试 9: 防 Tkinter 参数名 typo (v1.2.1 回归)
+
+    背景: 之前用了 'initialfilename' (错), Tcl 报错 'bad option -initialfilename'
+          正确参数名是 'initialfile'
+    """
+    print("\n=== Test 9: Tkinter 参数名 ===")
+    src = open(os.path.join(SCRIPT_DIR, "gui.py"), encoding="utf-8").read()
+
+    # 禁止 'initialfilename=' 作为实际 kwarg (错误参数名)
+    import re
+    bad_kwarg = re.findall(r'\binitialfilename\s*=', src)
+    assert not bad_kwarg, \
+        f"❌ gui.py 实际调用里还有 'initialfilename=' typo, 应改为 'initialfile=' ({len(bad_kwarg)} 处)"
+    print(f"  ✅ 没有 'initialfilename=' 实际 kwarg (只在注释里提到, OK)")
+
+    # 应该有 'initialfile=' (正确)
+    initialfile_count = src.count('initialfile=')
+    assert initialfile_count >= 1, "❌ 没找到 'initialfile=' (导出对话框应有默认文件名)"
+    print(f"  ✅ 'initialfile=' 出现 {initialfile_count} 次 (xlsx + log 导出)")
+
+    # VERSION 应该是 v1.2.1
+    assert 'VERSION = "v1.2.1"' in src, "❌ VERSION 没 bump 到 v1.2.1"
+    print("  ✅ VERSION = v1.2.1")
+
+    # 按钮文案应该是 "导出最近"
+    assert "导出最近为 xlsx" in src, "❌ 按钮文案没改成 '导出最近'"
+    assert "导出本次为 xlsx" not in src, "❌ 还有 '导出本次为 xlsx' 旧文案"
+    print("  ✅ 按钮文案 '导出最近为 xlsx' 正确")
+    return True
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print("  HCCheck v1.2 mock 测试")
@@ -241,6 +273,7 @@ if __name__ == "__main__":
         test_6b_latest_run_id()
         test_7_gui_loading()
         test_8_tab_order()
+        test_9_no_tkinter_typos()
 
         print("\n" + "=" * 60)
         print("  ✅ 全部测试通过!")

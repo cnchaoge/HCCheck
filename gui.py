@@ -83,7 +83,7 @@ class TextRedirector:
 # 主窗口
 # ============================================================
 class App(tk.Tk):
-    VERSION = "v1.2.0"
+    VERSION = "v1.2.1"
     APP_NAME = "HCCheck"
 
     def __init__(self):
@@ -278,7 +278,7 @@ class App(tk.Tk):
         hist_btns.pack(fill=tk.X, pady=(4, 0))
         ttk.Button(hist_btns, text="🔄 刷新",
                    command=self._refresh_history_table).pack(side=tk.LEFT)
-        ttk.Button(hist_btns, text="📊 导出本次为 xlsx",
+        ttk.Button(hist_btns, text="📊 导出最近为 xlsx",
                    command=self._export_history_xlsx).pack(side=tk.LEFT, padx=(4, 0))
 
         # 右侧提示
@@ -345,7 +345,7 @@ class App(tk.Tk):
         path = filedialog.asksaveasfilename(
             defaultextension=".xlsx",
             filetypes=[("Excel 文件", "*.xlsx")],
-            initialfilename=default_name,
+            initialfile=default_name,  # Tkinter 参数是 initialfile, 不是 initialfilename (v1.2.1 typo bug)
         )
         if not path:
             return
@@ -724,7 +724,7 @@ class App(tk.Tk):
         path = filedialog.asksaveasfilename(
             defaultextension=".txt",
             filetypes=[("文本文件", "*.txt"), ("所有文件", "*.*")],
-            initialfilename=f"HCCheck_日志_{time.strftime('%Y%m%d_%H%M%S')}.txt"
+            initialfile=f"HCCheck_日志_{time.strftime('%Y%m%d_%H%M%S')}.txt"  # 修复同上 (v1.2.1)
         )
         if path:
             self.log_text.config(state=tk.NORMAL)
