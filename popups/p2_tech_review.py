@@ -245,6 +245,60 @@ def _close_print_preview(context, pages_before):
             if closed:
                 break
 
+    # 🆕 v1.2.2 策略6: 诊断 — 打印所有含'关闭'文字的可见元素 HTML (不动点击)
+    # 背景: 策略5 selector 都未命中, 需要看 Lodop 工具栏真实 DOM 结构
+    #       帮下一次修复加精准 selector (不点, 只诊断)
+    if closed == 0:
+        print(f"  🔍 [DIAG] 策略5 未命中, 打印所有含'关闭'的可见元素 HTML...")
+        diag_total = 0
+        for p in context.pages:
+            try:
+                elements_info = p.evaluate("""() => {
+                    const results = [];
+                    const all = document.querySelectorAll('*');
+                    for (const el of all) {
+                        // 只看元素自己的文本 (不含子元素)
+                        const ownText = Array.from(el.childNodes)
+                            .filter(n => n.nodeType === 3)
+                            .map(n => n.textContent.trim())
+                            .join('');
+                        if (ownText === '关闭') {
+                            const rect = el.getBoundingClientRect();
+                            const style = window.getComputedStyle(el);
+                            const visible = rect.width > 0 && rect.height > 0
+                                && style.visibility !== 'hidden' && style.display !== 'none';
+                            results.push({
+                                tag: el.tagName,
+                                cls: el.className || '',
+                                id: el.id || '',
+                                parentTag: el.parentElement ? el.parentElement.tagName : '',
+                                parentCls: el.parentElement ? (el.parentElement.className || '') : '',
+                                grandparentTag: el.parentElement && el.parentElement.parentElement ? el.parentElement.parentElement.tagName : '',
+                                grandparentCls: el.parentElement && el.parentElement.parentElement ? (el.parentElement.parentElement.className || '') : '',
+                                href: el.href || '',
+                                visible: visible,
+                                outerHTML: el.outerHTML.substring(0, 250),
+                            });
+                        }
+                    }
+                    return results;
+                }""")
+                if elements_info:
+                    page_url = (p.url or '')[:50]
+                    print(f"  🔍 [DIAG] page[{page_url}]: 找到 {len(elements_info)} 个含'关闭'的元素:")
+                    for i, info in enumerate(elements_info[:8]):  # 最多打 8 个
+                        print(f"    [{i+1}] <{info['tag']}> class='{info['cls'][:30]}' id='{info['id'][:15]}' visible={info['visible']}")
+                        print(f"         parent=<{info['parentTag']}> class='{info['parentCls'][:30]}'")
+                        print(f"         grandparent=<{info['grandparentTag']}> class='{info['grandparentCls'][:30]}'")
+                        if info['href']:
+                            print(f"         href: {info['href'][:80]}")
+                        print(f"         outerHTML: {info['outerHTML'][:200]}")
+                    diag_total += len(elements_info)
+            except Exception as e:
+                print(f"  ⚠️ [DIAG] page evaluate 失败: {type(e).__name__}: {e}")
+        if diag_total == 0:
+            print(f"  🔍 [DIAG] 全部 page 里都没找到含'关闭'文字的元素 → Lodop preview 可能不在 popup 的 DOM 里")
+
     if closed == 0:
         print(f"  ℹ️ 打印预览可能仍在显示（不影响后续流程）")
     return closed
