@@ -340,6 +340,71 @@ def _close_print_preview(context, pages_before):
     if closed == 0:
         print(f"  ℹ️ 打印预览可能仍在显示（不影响后续流程）")
 
+    # 🆕 v1.2.2 策略9: 列 LODOP 所有方法 + 试常见 close 相关 API
+    # 背景: 策略8 PREVIEW(false) 是 no-op, 需找出真能关已开预览的 API
+    if closed == 0:
+        print(f"  🔍 [STRATEGY9] 列 LODOP 方法 + 试 close 相关 API...")
+        for p in context.pages:
+            for f in p.frames:
+                fname = (f.name or '').lower()
+                if 'workflow_tmp' in fname:
+                    try:
+                        result = f.evaluate("""() => {
+                            const actions = [];
+                            if (!window.LODOP) {
+                                return ['no_LODOP'];
+                            }
+                            // 列所有方法/属性
+                            const allKeys = Object.keys(window.LODOP).sort();
+                            actions.push('all_keys=' + allKeys.length);
+                            // 找出 close/cancel/preview 相关的
+                            const closeKeys = allKeys.filter(k =>
+                                /close|cancel|exit|hide|destroy|dispose|release|print/i.test(k)
+                            );
+                            actions.push('close_related=[' + closeKeys.join(',') + ']');
+                            // 试调可能的 close API
+                            const tryMethods = [
+                                'ClosePrintWindow', 'CloseLodop', 'Close',
+                                'CancelPrint', 'Dispose', 'PRINT',
+                                'SET_PRINT_MODE',
+                            ];
+                            for (const m of tryMethods) {
+                                if (typeof window.LODOP[m] === 'function') {
+                                    try {
+                                        // 调 close 方法 (不传参)
+                                        if (m === 'SET_PRINT_MODE') {
+                                            // 这个需要参数, 只试 'CLOSE_LODOP_ON_COMMIT' / 'CLEAN_PRINT' 类
+                                            try { window.LODOP[m]('CLOSE_PREVIEW_WINDOW', true); actions.push(m + '(CLOSE_PREVIEW_WINDOW) ok'); } catch(e) {}
+                                            try { window.LODOP[m]('CLEAN_PRINT', true); actions.push(m + '(CLEAN_PRINT) ok'); } catch(e) {}
+                                        } else if (m === 'PRINT') {
+                                            // 不调 (会真打印)
+                                            actions.push(m + '_exists_but_skip');
+                                        } else {
+                                            window.LODOP[m]();
+                                            actions.push(m + '() called');
+                                        }
+                                    } catch(e) {
+                                        actions.push(m + '_err:' + e.message);
+                                    }
+                                }
+                            }
+                            return actions;
+                        }""")
+                        for r in result:
+                            print(f"  🔍 [STRATEGY9] {r}")
+                        if any('called' in r or 'ok' in r for r in result):
+                            # 但其实 'ok' 可能是 SET_PRINT_MODE 配置项改了, 未必关预览
+                            # 需要看预览是否真关 → 返回 True 让外层多等 1s
+                            pa(config.PA_SHORT)
+                            closed = 1
+                            print(f"  🔍 [STRATEGY9] (猜) 某个 API 调用了, 实际效果需看预览窗口")
+                        break
+                    except Exception as e:
+                        print(f"  ⚠️ [STRATEGY9] {f.name} 失败: {type(e).__name__}: {e}")
+
+    if closed == 0:
+        print(f"  ℹ️ 打印预览可能仍在显示（不影响后续流程）")
+
     # 🆕 v1.2.2 策略8: 进到 _workflow_tmp iframe 调 LODOP API 关预览
     # 背景: 策略7 诊断定位到 _workflow_tmp iframe 是 Lodop 预览位置, window.LODOP 在那里定义
     #       body 里能看到 LODOP.PRINT_INITA(...) 等代码 → LODOP 对象可用
