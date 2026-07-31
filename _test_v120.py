@@ -131,6 +131,30 @@ def test_6_empty_run_id():
     return True
 
 
+def test_6b_latest_run_id():
+    """Test 6b: get_latest_run_id 跨进程查最新 (v1.2.1 修复验证)"""
+    print("\n=== Test 6b: get_latest_run_id ===")
+    # 先清掉表, 插 2 个不同 run_id
+    import sqlite3
+    conn = sqlite3.connect(config.DB_FILE, timeout=5)
+    conn.execute("DELETE FROM runs")
+    conn.commit()
+    conn.close()
+
+    # 插第 1 个 run (老)
+    db.record_run("冀J0E139", "带挂", time.time()-100, time.time()-50, "成功", "", run_id="20260101-120000-old0001")
+    # 插第 2 个 run (新)
+    db.record_run("冀J0E140", "不带挂", time.time()-50, time.time()-20, "成功", "", run_id="20260101-130000-new0002")
+    # 插第 3 个 (中间 created_at)
+    db.record_run("冀J0E141", "带挂", time.time()-10, time.time(), "失败", "测试错误", run_id="20260101-140000-mid0003")
+
+    latest = db_query.get_latest_run_id()
+    print(f"  最新 run_id: {latest}")
+    assert latest == "20260101-140000-mid0003", f"应为 mid0003, 实际 {latest}"
+    print(f"  ✅ 最新 run_id 正确")
+    return True
+
+
 def test_7_gui_loading():
     """测试 7: GUI 代码结构 (AST 检查, 不实际 import, 避开 playwright 依赖)"""
     print("\n=== Test 7: GUI 代码结构 ===")
@@ -214,6 +238,7 @@ if __name__ == "__main__":
         test_4_summary(run_id)
         test_5_export(run_id)
         test_6_empty_run_id()
+        test_6b_latest_run_id()
         test_7_gui_loading()
         test_8_tab_order()
 

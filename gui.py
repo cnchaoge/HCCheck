@@ -5,7 +5,7 @@
 """
 import threading
 import tkinter as tk
-from tkinter import ttk, scrolledtext, messagebox
+from tkinter import ttk, scrolledtext, messagebox, filedialog
 import sys
 import os
 import time
@@ -232,7 +232,7 @@ class App(tk.Tk):
         info = ttk.Frame(parent)
         info.pack(fill=tk.X, pady=(0, 6))
 
-        ttk.Label(info, text="本次运行:",
+        ttk.Label(info, text="最近运行:",
                   foreground="gray").pack(side=tk.LEFT)
         self.history_run_id_var = tk.StringVar(value="—")
         ttk.Label(info, textvariable=self.history_run_id_var,
@@ -244,7 +244,7 @@ class App(tk.Tk):
                   font=("Microsoft YaHei", 10), foreground="#1a73e8").pack(side=tk.RIGHT)
 
         # ── 表格区 ──
-        table_frame = ttk.LabelFrame(parent, text="本次车辆处理结果", padding=4)
+        table_frame = ttk.LabelFrame(parent, text="最近一次车辆处理结果", padding=4)
         table_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 6))
 
         # Treeview (4 列: 车牌 / 类型 / 耗时 / 状态)
@@ -290,13 +290,17 @@ class App(tk.Tk):
         self._refresh_history_table()
 
     def _refresh_history_table(self):
-        """刷新历史记录表格 (从 SQLite 读本次 run 的数据)"""
+        """刷新历史记录表格 (从 SQLite 读最近一次 run 的数据)
+
+        v1.2.1 修复: 不再用 db.get_run_id() (那是当前进程的, 跟 RUN.PY 进程不同)
+        改成跨进程读 DB 最新一条记录的 run_id
+        """
         # 清空现有
         for item in self.history_tree.get_children():
             self.history_tree.delete(item)
 
-        # 拿当前 run_id
-        run_id = db.get_run_id()
+        # 拿"最近一次运行" (跨进程读 DB 最新)
+        run_id = db_query.get_latest_run_id()
         self.history_run_id_var.set(run_id or "—")
 
         if not run_id:
@@ -330,8 +334,8 @@ class App(tk.Tk):
         self.history_status_var.set(f"已加载 {len(runs)} 条")
 
     def _export_history_xlsx(self):
-        """导出本次 run 的所有车为 xlsx"""
-        run_id = db.get_run_id()
+        """导出最近一次 run 的所有车为 xlsx"""
+        run_id = db_query.get_latest_run_id()
         if not run_id:
             messagebox.showwarning("导出失败", "未运行过，无数据可导出")
             return

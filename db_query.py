@@ -16,6 +16,35 @@ from typing import List, Dict, Optional
 import config
 
 
+def get_latest_run_id() -> Optional[str]:
+    """跨进程获取数据库里最近一次运行的 run_id (v1.2.1 修复)
+
+    背景:
+        原设计假设 GUI 进程 == RUN.PY 进程 (共享模块级 _RUN_ID)
+        实际使用时 RUN.PY 和 GUI.PY 是 2 个进程, 各有各的 _RUN_ID
+        导致 GUI 的 "本次运行" 永远是空的
+
+    修法:
+        不依赖当前进程的 _RUN_ID, 而是查 DB 里最新的一条记录
+        ORDER BY created_at DESC, id DESC (id 作为 fallback tiebreaker)
+
+    Returns:
+        最新 run_id 字符串, DB 为空返回 None
+    """
+    try:
+        with sqlite3.connect(config.DB_FILE, timeout=5) as conn:
+            row = conn.execute("""
+                SELECT run_id FROM runs
+                ORDER BY created_at DESC, id DESC
+                LIMIT 1
+            """).fetchone()
+        return row[0] if row else None
+    except Exception as e:
+        if config.DEBUG:
+            print(f"  调试 - get_latest_run_id 失败: {e}")
+        return None
+
+
 def get_runs_by_run_id(run_id: str) -> List[Dict]:
     """查询指定 run_id 的所有车辆处理结果
 
