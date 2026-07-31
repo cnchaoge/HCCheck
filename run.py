@@ -1199,7 +1199,22 @@ def get_next_plate_from_list(page: Page) -> Optional[str]:
     扫描多个 table (年审列表可能分多个表格)
     Columns: Seq|Radio|ApprovalNo|AppNo|Name|Date|Phone|Plate|Color|VIN|Source
     ApprovalNo at index 2, Plate at index 7
+
+    🆕 v1.2.2: 加 page URL/title DBG 输出, 帮调试"页面被关"是哪一刻
     """
+    # 🆕 v1.2.2: 提前检查 + DBG 输出 (排查"页面加载中被关"问题)
+    try:
+        url_dbg = page.url[:80] if page.url else "(空)"
+    except Exception:
+        url_dbg = "(读取失败)"
+    try:
+        title_dbg = page.title()[:30] if page.title() else "(空)"
+    except Exception:
+        title_dbg = "(读取失败)"
+    print(f"  🔍 [DBG] 当前 URL: {url_dbg}")
+    print(f"  🔍 [DBG] 当前 title: {title_dbg}")
+    print(f"  🔍 [DBG] page.is_closed(): {page.is_closed()}")
+
     main_kef = get_main_kef(page)
     # [DEBUG] 打印前 2 个 table 的前 3 行列结构（确认列索引是否正确）
     try:
@@ -1211,11 +1226,13 @@ def get_next_plate_from_list(page: Page) -> Optional[str]:
                 contents = [cells_dbg.nth(c).text_content().strip()[:15] for c in range(cells_dbg.count())]
                 print(f"  🔍 [DBG] table{t_idx} 行{r_idx}: {cells_dbg.count()}列 → {contents}")
     except Exception as e:
-        print(f"  ⚠️ [DBG] 调试日志失败: {e}")
+        print(f"  ⚠️ [DBG] 调试日志失败: {type(e).__name__}: {e}")
     # 扫描所有 table (可能分多页)
     try:
         tables = main_kef.locator(config.SELECTOR_TABLE)
-        for t_idx in range(tables.count()):
+        table_count = tables.count()
+        print(f"  🔍 [DBG] 找到 {table_count} 个 table")
+        for t_idx in range(table_count):
             rows = tables.nth(t_idx).locator("tbody tr")
             for r in range(rows.count()):
                 cells = rows.nth(r).locator("td")
@@ -1233,7 +1250,8 @@ def get_next_plate_from_list(page: Page) -> Optional[str]:
                             continue
                         return txt
     except Exception as e:
-        print(f"  ⚠️ 读取年审列表失败: {e}")
+        print(f"  ⚠️ 读取年审列表失败: {type(e).__name__}: {e}")
+        print(f"     page.is_closed() = {page.is_closed()}")
     # fallback: 扫全文找第一个未拉黑的车牌
     try:
         all_text = main_kef.locator("body").text_content()
@@ -1242,7 +1260,7 @@ def get_next_plate_from_list(page: Page) -> Optional[str]:
                 print(f"  全文搜索取到车牌: {m}")
                 return m
     except Exception as e:
-        print(f"  ⚠️ 全文搜索车牌失败: {e}")
+        print(f"  ⚠️ 全文搜索车牌失败: {type(e).__name__}: {e}")
     # 调试: 打印 main_kef 内容（仅 DEBUG 模式）
     if config.DEBUG:
         try:
@@ -1519,16 +1537,30 @@ def main() -> None:
                     _click_normal_review_link(contents)
                     pa(config.PA_AFTER_CLICK)
 
-                    # 验证 main_kef 是否真的切到了普货审验列表
+                    # 🆕 v1.2.2 修复: 不盲点 (会让半加载页面被关)
+                    # 先 sleep 2s 等页面加载, 再 verify; 还失败才重试 click
                     if not _verify_in_normal_review(page):
                         if config.DEBUG:
-                            print(f"  ⚠️ 验证未切到普货审验, 重试点击...")
-                        # 再试一次
-                        _click_normal_review_link(contents)
+                            print(f"  ⚠️ 第一次 verify 失败, 等 2 秒再 verify...")
                         pa(config.PA_AFTER_CLICK)
+                        if not _verify_in_normal_review(page):
+                            if config.DEBUG:
+                                print(f"  ⚠️ 二次 verify 还失败, 重试点击...")
+                            _click_normal_review_link(contents)
+                            pa(config.PA_AFTER_CLICK)
+                            # 🆕 重试 click 后再给一次 verify, 避免下一步读死页
+                            _verify_in_normal_review(page)
                 except Exception as e:
                     print(f"  普货审验自动导航失败: {e}")
                     safe_input("  >>> 请手动点左侧[普货审验],然后按回车...")
+
+                # 🆕 v1.2.2: 读 table 前先检查页面是否还活着 (用户报告"页面被关")
+                if page.is_closed():
+                    print(f"  ⚠️ 页面已关闭 (无法读年审列表)")
+                    print(f"  ⚠️ 可能是 运管站系统中断/超时/反爬检测")
+                    print(f"  📋 年审列表和工作台均无待办车辆,流程结束 ✅")
+                    break
+
                 plate = get_next_plate_from_list(page)
                 if not plate:
                     # 拿不到车牌 → 直接结束（不重试，避免重复调试输出）
