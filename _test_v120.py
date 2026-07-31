@@ -226,6 +226,48 @@ def test_8_tab_order():
     return True
 
 
+def test_10_popup4_excludes_main_page():
+    """测试 10: popup4 _close_residual_popups 豁免主页面 (v1.2.2 修复)
+
+    背景: 17:39 实测 popup4 入口清理残留弹窗时, 主页面也被关, 导致后续 navigation 全失败
+    修法: _close_residual_popups 增加 main_page 参数, 同时豁免主页面
+    """
+    print("\n=== Test 10: popup4 豁免主页面 ===")
+    import popups.p4_vehicle_annual as p4
+
+    # 检查 handle 函数签名
+    import inspect
+    handle_sig = inspect.signature(p4.handle)
+    assert 'main_page' in handle_sig.parameters, \
+        "❌ popup4.handle 没有 main_page 参数"
+    print("  ✅ popup4.handle 有 main_page 参数")
+
+    # 检查 _click_year_check 函数签名
+    cyc_sig = inspect.signature(p4._click_year_check)
+    assert 'main_page' in cyc_sig.parameters, \
+        "❌ popup4._click_year_check 没有 main_page 参数"
+    print("  ✅ popup4._click_year_check 有 main_page 参数")
+
+    # 检查 _close_residual_popups 函数签名
+    crp_sig = inspect.signature(p4._close_residual_popups)
+    assert 'main_page' in crp_sig.parameters, \
+        "❌ popup4._close_residual_popups 没有 main_page 参数"
+    print("  ✅ popup4._close_residual_popups 有 main_page 参数")
+
+    # 检查 run.py 调用方都传了 main_page=page (忽略注释行)
+    import re
+    run_src_lines = open(os.path.join(SCRIPT_DIR, "run.py"), encoding="utf-8").readlines()
+    code_lines = [l for l in run_src_lines if not l.strip().startswith("#")]
+    code_src = "".join(code_lines)
+    handle_calls = re.findall(r'handle_vehicle_annual\(', code_src)
+    main_page_passes = re.findall(r'main_page=page\b', code_src)
+    print(f"  ✅ run.py 里 handle_vehicle_annual 调用 {len(handle_calls)} 处")
+    print(f"  ✅ main_page=page 实际传参 {len(main_page_passes)} 处")
+    assert len(handle_calls) == 2, f"❌ 应有 2 处调用, 实际 {len(handle_calls)}"
+    assert len(main_page_passes) == 2, f"❌ 应有 2 处传 main_page=page, 实际 {len(main_page_passes)}"
+    return True
+
+
 def test_9_no_tkinter_typos():
     """测试 9: 防 Tkinter 参数名 typo (v1.2.1 回归)
 
@@ -274,6 +316,7 @@ if __name__ == "__main__":
         test_7_gui_loading()
         test_8_tab_order()
         test_9_no_tkinter_typos()
+        test_10_popup4_excludes_main_page()
 
         print("\n" + "=" * 60)
         print("  ✅ 全部测试通过!")

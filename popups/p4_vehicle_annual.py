@@ -17,7 +17,8 @@ from dialog import do_dialog
 
 def handle(popup, context, plate,
            action_type=config.ACTION_SUBMIT_ARCHIVE,
-           category=config.CATEGORY_ROLE):
+           category=config.CATEGORY_ROLE,
+           main_page=None):
     print("\n  ═══════════════════")
     print("  📋 popup4: 车辆年审")
     print("  ═══════════════════")
@@ -27,8 +28,8 @@ def handle(popup, context, plate,
     _click_plate_link(popup, plate)
 
     # 用 3 个策略找"年度审验"链接
-    # 🆕 传 context 让 retry 期间能清理残留弹窗 (修复 #4)
-    clicked = _click_year_check(popup, context, max_retry=2)
+    # 🆕 传 context + main_page 让 retry 期间能清理残留弹窗 (修复 #4 + v1.2.2 主页面豁免)
+    clicked = _click_year_check(popup, context, main_page=main_page, max_retry=2)
 
     if not clicked:
         print("  ⚠️ 找不到年度审验链接,手动点击后按回车")
@@ -82,17 +83,24 @@ def _click_plate_link(popup, plate):
 
 
 # ========= popup4 retry 残留弹窗清理 (优化方案 #4) =========
-def _close_residual_popups(context, exclude_popup):
-    """关掉 popup4 进入前的残留弹窗 page,只保留当前 popup
+def _close_residual_popups(context, exclude_popup, main_page=None):
+    """关掉 popup4 进入前的残留弹窗 page,只保留当前 popup + 主页面
 
     背景:popup4 retry 等待时,submitDiag iframe alert 可能被 dialog handler
     自动处理,但**新弹窗 (page 级别) 残留**会导致 retry 时 popup 不是干净状态。
     2026-06-24 12:30 实跑 17 辆时偶发此问题。
+
+    🆕 v1.2.2: 增加 main_page 参数豁免主页面 (否则会把主页关了)
+       现象: 2026-07-31 17:39 实测 popup4 入口清理后, 主页面被关, 后续
+            navigation 全失败, 误报 "无待办车辆"
+       修法: exclude_popup + main_page 都不关
     """
     closed = 0
     try:
         for p in context.pages:
             if p == exclude_popup:
+                continue
+            if main_page is not None and p == main_page:
                 continue
             try:
                 p.close()
@@ -147,14 +155,15 @@ def _any_year_check_visible(popup):
     return False
 
 
-def _click_year_check(popup, context=None, max_retry=2):
+def _click_year_check(popup, context=None, main_page=None, max_retry=2):
     """点"年度审验"链接,带重试和智能等待（替代 pa(3)）
 
     🆕 修复 #4: 进入前清理残留弹窗 (popup3 或更早传下来的 submitDiag 残留)
+    🆕 v1.2.2: 增加 main_page 豁免 (主页面不能被关)
     """
     # 🆕 进入前先清理残留弹窗,确保从干净状态开始 retry
     if context is not None:
-        closed = _close_residual_popups(context, popup)
+        closed = _close_residual_popups(context, popup, main_page=main_page)
         if closed:
             print(f"  🧹 清理 {closed} 个残留弹窗 (popup4 入口)")
         _wait_residual_cleared(context, popup)

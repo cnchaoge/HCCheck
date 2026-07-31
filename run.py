@@ -1021,7 +1021,8 @@ def process_unmarked(page: Page, plate: str, run_from_step: Optional[str] = None
         config.STEP_VEHICLE_CHECK: lambda p: handle_vehicle_check(p, plate),
         config.STEP_TECH_REVIEW: lambda p: handle_tech_review(p, context, page, plate),
         config.STEP_BUSINESS_REVIEW: lambda p: handle_business_review(p, context, plate, action_type=config.ACTION_SUBMIT_VEHICLE_ANNUAL),
-        config.STEP_VEHICLE_ANNUAL: lambda p: handle_vehicle_annual(p, context, plate, action_type=config.ACTION_SUBMIT_ARCHIVE, category=config.CATEGORY_ROLE),
+        # 🆕 v1.2.2: 传 main_page=page, popup4 清理残留时不能关主页面
+        config.STEP_VEHICLE_ANNUAL: lambda p: handle_vehicle_annual(p, context, plate, action_type=config.ACTION_SUBMIT_ARCHIVE, category=config.CATEGORY_ROLE, main_page=page),
         config.STEP_ARCHIVE: lambda p: handle_archive(p, page, plate),
     }
 
@@ -1087,7 +1088,8 @@ def process_marked(page: Page, plate: str, run_from_step: Optional[str] = None, 
     # 带挂 popup3 (归档)            →  点完成 + 2次确认
     step_handlers = {
         config.STEP_BUSINESS_REVIEW: lambda p: handle_business_review(p, context, plate, action_type=config.ACTION_SUBMIT_YEAR_CHECK),
-        config.STEP_VEHICLE_ANNUAL: lambda p: handle_vehicle_annual(p, context, plate, action_type=config.ACTION_SUBMIT_ARCHIVE, category=config.CATEGORY_INITIATOR),
+        # 🆕 v1.2.2: 传 main_page=page, popup4 清理残留时不能关主页面
+        config.STEP_VEHICLE_ANNUAL: lambda p: handle_vehicle_annual(p, context, plate, action_type=config.ACTION_SUBMIT_ARCHIVE, category=config.CATEGORY_INITIATOR, main_page=page),
         config.STEP_ARCHIVE: lambda p: handle_archive(p, page, plate),
     }
 
