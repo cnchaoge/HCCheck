@@ -216,6 +216,35 @@ def _close_print_preview(context, pages_before):
             except:
                 pass
 
+    # 🆕 v1.2.2 策略5: 找 Lodop preview 容器里的"关闭"按钮直接点
+    # 背景: 17:39 运管站实测 popup2 打印后预览不关, 窗口可见 Lodop 的 "关闭" 按钮
+    #       (顶部工具栏: 沧州运政 / 打印预览 / 设置 / 关闭 / 100%)
+    #       Lodop preview 是 HTML 嵌入 popup 页面, 不是独立窗口也不是 LODOP 对象
+    #       策略 1-4 都失效, 这个是唯一靠 DOM 能点到的入口
+    if closed == 0:
+        lodop_close_selectors = [
+            'div.LODOP_WebPrint button:has-text("关闭")',
+            'div[class*="LODOP"] button:has-text("关闭")',
+            'div[class*="lodop"] button:has-text("关闭")',
+            'div[class*="Lodop"] button:has-text("关闭")',
+            'div[role="dialog"] button:has-text("关闭")',
+            # Lodop 预览顶部的关闭链接 (不是 button)
+            'a:has-text("关闭"):visible',
+        ]
+        for p in context.pages:
+            for sel in lodop_close_selectors:
+                try:
+                    btn = p.locator(sel).first
+                    if btn.is_visible():
+                        btn.click(timeout=2000)
+                        print(f"  ✓ 点击 Lodop preview 关闭按钮 (selector: {sel[:40]})")
+                        closed = 1
+                        break
+                except:
+                    continue
+            if closed:
+                break
+
     if closed == 0:
         print(f"  ℹ️ 打印预览可能仍在显示（不影响后续流程）")
     return closed

@@ -226,12 +226,40 @@ def test_8_tab_order():
     return True
 
 
+def test_11_popup2_strategy5():
+    """测试 11: popup2 _close_print_preview 有策略5 (v1.2.2)
+
+    背景: 17:39 运管站实测 popup2 打印后 Lodop 预览不关, 旧 4 策略都失效
+    修法: 加策略5, 主动找 Lodop preview 容器里的"关闭"按钮直接点
+    """
+    print("\n=== Test 11: popup2 策略5 (Lodop 关闭按钮) ===")
+    src = open(os.path.join(SCRIPT_DIR, "popups/p2_tech_review.py"), encoding="utf-8").read()
+
+    # 检查策略5存在
+    assert "lodop_close_selectors" in src, "❌ popup2 没有 lodop_close_selectors"
+    print("  ✅ popup2 策略5 lodop_close_selectors 存在")
+
+    # 检查 selector 列表包含关键 Lodop 容器
+    for selector in [
+        "LODOP_WebPrint",     # Lodop 主预览容器 class
+        "关闭",                # 按钮文字
+    ]:
+        assert selector in src, f"❌ popup2 策略5 缺少关键 selector: {selector}"
+    print("  ✅ 包含 LODOP_WebPrint selector + '关闭' 按钮")
+
+    # 检查 fallback 到原提示
+    assert "ℹ️ 打印预览可能仍在显示" in src, "❌ 错误信息丢了"
+    print("  ✅ fallback 提示 '打印预览可能仍在显示' 保留")
+    return True
+
+
 def test_10_popup4_excludes_main_page():
     """测试 10: popup4 _close_residual_popups 豁免主页面 (v1.2.2 修复)
 
     背景: 17:39 实测 popup4 入口清理残留弹窗时, 主页面也被关, 导致后续 navigation 全失败
     修法: _close_residual_popups 增加 main_page 参数, 同时豁免主页面
     """
+    print("\n=== Test 10: popup4 豁免主页面 ===")
     print("\n=== Test 10: popup4 豁免主页面 ===")
     import popups.p4_vehicle_annual as p4
 
@@ -317,6 +345,7 @@ if __name__ == "__main__":
         test_8_tab_order()
         test_9_no_tkinter_typos()
         test_10_popup4_excludes_main_page()
+        test_11_popup2_strategy5()
 
         print("\n" + "=" * 60)
         print("  ✅ 全部测试通过!")
