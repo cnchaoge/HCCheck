@@ -299,6 +299,44 @@ def _close_print_preview(context, pages_before):
         if diag_total == 0:
             print(f"  🔍 [DIAG] 全部 page 里都没找到含'关闭'文字的元素 → Lodop preview 可能不在 popup 的 DOM 里")
 
+    # 🆕 v1.2.2 策略7: 诊断升级 — 列出所有 page + iframe + iframe 内容 (定位 Lodop preview 在哪)
+    if closed == 0:
+        print(f"  🔍 [DIAG2] 列出所有 page + iframe 详情, 定位 Lodop preview...")
+        print(f"  🔍 [DIAG2] context.pages 总数: {len(context.pages)}")
+        for idx, p in enumerate(context.pages):
+            try:
+                p_url = (p.url or '')[:80]
+                try:
+                    p_title = (p.title() or '')[:30]
+                except Exception:
+                    p_title = '(读取失败)'
+                print(f"  🔍 [DIAG2] [{idx}] url={p_url} title={p_title}")
+
+                # 列出所有 iframes + 每个 iframe 的 body 头 200 字
+                try:
+                    frames = p.frames
+                    print(f"  🔍 [DIAG2]   iframes: {len(frames)}")
+                    for f_idx, f in enumerate(frames):
+                        try:
+                            f_name = f.name or '(unnamed)'
+                            f_url = (f.url or '')[:60]
+                            # 拿 iframe body 头 200 字
+                            try:
+                                f_body = f.evaluate("() => (document.body && document.body.textContent || '').substring(0, 200)")
+                            except Exception:
+                                f_body = '(读取失败)'
+                            # 检查是否含 Lodop 特征
+                            has_lodop_kw = any(kw in (f_body or '').lower() for kw in ['lodop', '打印', 'preview', '关闭'])
+                            marker = ' 👀 LODOP候选' if has_lodop_kw else ''
+                            print(f"  🔍 [DIAG2]     [{f_idx}] name={f_name} url={f_url}{marker}")
+                            print(f"  🔍 [DIAG2]        body: {f_body[:150]}")
+                        except Exception as fe:
+                            print(f"  🔍 [DIAG2]     [{f_idx}] 读取失败: {fe}")
+                except Exception as fe:
+                    print(f"  🔍 [DIAG2]   iframes 列表失败: {fe}")
+            except Exception as pe:
+                print(f"  🔍 [DIAG2] [{idx}] 读取 page 失败: {pe}")
+
     if closed == 0:
         print(f"  ℹ️ 打印预览可能仍在显示（不影响后续流程）")
     return closed
