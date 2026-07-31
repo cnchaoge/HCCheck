@@ -339,6 +339,65 @@ def _close_print_preview(context, pages_before):
 
     if closed == 0:
         print(f"  ℹ️ 打印预览可能仍在显示（不影响后续流程）")
+
+    # 🆕 v1.2.2 策略8: 进到 _workflow_tmp iframe 调 LODOP API 关预览
+    # 背景: 策略7 诊断定位到 _workflow_tmp iframe 是 Lodop 预览位置, window.LODOP 在那里定义
+    #       body 里能看到 LODOP.PRINT_INITA(...) 等代码 → LODOP 对象可用
+    #       调 PREVIEW(false) / SET_PRINT_MODE('AUTO_CLOSE_PREWINDOW', true) 关预览
+    if closed == 0:
+        print(f"  🔍 [STRATEGY8] 进 _workflow_tmp iframe 调 LODOP API 关预览...")
+        for p in context.pages:
+            for f in p.frames:
+                fname = (f.name or '').lower()
+                if 'workflow_tmp' in fname:
+                    try:
+                        result = f.evaluate("""() => {
+                            const actions = [];
+                            if (!window.LODOP) {
+                                actions.push('no_LODOP_in_iframe');
+                                return actions;
+                            }
+                            actions.push('has_LODOP');
+                            // 1. PREVIEW(false) - 取消预览
+                            try {
+                                if (typeof window.LODOP.PREVIEW === 'function') {
+                                    window.LODOP.PREVIEW(false);
+                                    actions.push('PREVIEW_false');
+                                } else {
+                                    actions.push('no_PREVIEW_method');
+                                }
+                            } catch(e) { actions.push('PREVIEW_err:' + e.message); }
+                            // 2. AUTO_CLOSE_PREWINDOW - 未来预览自动关
+                            try {
+                                if (typeof window.LODOP.SET_PRINT_MODE === 'function') {
+                                    window.LODOP.SET_PRINT_MODE('AUTO_CLOSE_PREWINDOW', true);
+                                    actions.push('AUTO_CLOSE_true');
+                                } else {
+                                    actions.push('no_SET_PRINT_MODE');
+                                }
+                            } catch(e) { actions.push('AUTO_CLOSE_err:' + e.message); }
+                            // 3. 备用 - CLOSE_PRINTTASK
+                            try {
+                                if (typeof window.LODOP.CLOSE_PRINTTASK === 'function') {
+                                    window.LODOP.CLOSE_PRINTTASK();
+                                    actions.push('CLOSE_PRINTTASK_called');
+                                } else {
+                                    actions.push('no_CLOSE_PRINTTASK');
+                                }
+                            } catch(e) { actions.push('CLOSE_PRINTTASK_err:' + e.message); }
+                            return actions;
+                        }""")
+                        print(f"  🔍 [STRATEGY8] {f.name}: {result}")
+                        if any('PREVIEW_false' in r or 'AUTO_CLOSE_true' in r or 'CLOSE_PRINTTASK' in r for r in result):
+                            closed = 1
+                            print(f"  ✓ 调 LODOP API 关闭预览")
+                        # 只在第一个 _workflow_tmp iframe 试一次
+                        break
+                    except Exception as e:
+                        print(f"  ⚠️ [STRATEGY8] {f.name} 失败: {type(e).__name__}: {e}")
+
+    if closed == 0:
+        print(f"  ℹ️ 打印预览可能仍在显示（不影响后续流程）")
     return closed
 
 
