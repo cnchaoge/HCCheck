@@ -4,17 +4,35 @@ import os
 
 所有可能因为站点改版而变化的硬编码都集中在这里,改一处生效全局。
 业务术语的同义变体(打印告知单的多种写法等)放在使用方局部列表里更直观,不在此处。
+
+v1.2 数据目录变更:
+- 新优先: HCCheck.exe 同目录的 data/ 子目录 (E:\\HCCheck\\data)
+- 兜底:   %APPDATA%\\HCCheck (兼容旧版)
+- 老数据自动迁移 + 备份到 .legacy_backup/<时间戳>/
 """
 import re
 import sys
+import shutil
+import time as _time
+
+
+# 脚本所在目录 (开发模式 / 打包模式都准确)
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def _is_frozen() -> bool:
+    """是否 PyInstaller 打包后运行"""
+    return getattr(sys, "frozen", False)
 
 
 def get_user_data_dir():
-    """获取用户数据目录（跨平台）
+    """获取传统 APPDATA 目录路径（v1.2 兼容用，迁移老数据时定位来源）
 
     - Windows: %APPDATA%\\HCCheck
     - macOS:   ~/Library/Application Support/HCCheck
     - Linux:   $XDG_DATA_HOME/HCCheck 或 ~/.local/share/HCCheck
+
+    注意: 不在这里 makedirs, 由 get_data_dir() 统一管理
     """
     if sys.platform == "win32":
         base = os.environ.get("APPDATA") or os.path.expanduser("~")
@@ -23,19 +41,143 @@ def get_user_data_dir():
     else:
         base = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
 
-    data_dir = os.path.join(base, "HCCheck")
-    os.makedirs(data_dir, exist_ok=True)
-    return data_dir
+    return os.path.join(base, "HCCheck")
 
 
-# 用户配置文件路径（PyInstaller 打包后也能保留在用户目录）
-USER_CONFIG_FILE = os.path.join(get_user_data_dir(), "user_config.json")
+def _can_write_dir(path: str) -> bool:
+    """检查目录是否可写（写测试文件验证真实权限）"""
+    try:
+        os.makedirs(path, exist_ok=True)
+        test_file = os.path.join(path, ".write_test")
+        with open(test_file, "w") as f:
+            f.write("ok")
+        os.remove(test_file)
+        return True
+    except (OSError, PermissionError):
+        return False
 
-# 黑名单车牌文件路径（同样位于用户数据目录）
-SKIP_PLATES_FILE = os.path.join(get_user_data_dir(), "skip_plates.json")
+
+def get_data_dir() -> str:
+    """获取数据目录（v1.2 新设计）
+
+    优先级:
+      1. PyInstaller 打包后: HCCheck.exe 所在目录 + /data (推荐,E:\\HCCheck\\data)
+      2. Python 开发模式:    脚本所在目录 + /data
+      3. 上面都失败 → 回退到 %APPDATA%/HCCheck (兼容旧版)
+
+    Returns:
+        数据目录绝对路径 (保证存在 + 可写)
+    """
+    if _is_frozen():
+        base = os.path.dirname(os.path.abspath(sys.executable))
+    else:
+        base = SCRIPT_DIR
+
+    primary = os.path.join(base, "data")
+    if _can_write_dir(primary):
+        return primary
+
+    fallback = get_user_data_dir()
+    if _can_write_dir(fallback):
+        return fallback
+
+    # 实在不行就用 primary (makedirs 可能失败但不影响主流程)
+    os.makedirs(primary, exist_ok=True)
+    return primary
+
+
+def migrate_legacy_data() -> dict:
+    """从 %APPDATA%/HCCheck 迁移老数据到新 data 目录
+
+    规则:
+      - 旧文件存在 + 新文件不存在 → 复制过去 + 在新目录建 .legacy_backup/<时间戳>/ 留底
+      - 新文件已存在 → 不动 (新数据是事实)
+      - 旧文件保留不动 (用户可手动清理)
+
+    Returns:
+        {"migrated": [filenames], "backup_dir": path or None, "old_dir": path or None}
+    """
+    old_dir = get_user_data_dir()
+    new_dir = get_data_dir()
+
+    if not os.path.isdir(old_dir):
+        return {"migrated": [], "backup_dir": None, "old_dir": None}
+
+    old_files = ["user_config.json", "skip_plates.json", "hccheck.db"]
+    backup_root = os.path.join(new_dir, ".legacy_backup")
+    timestamp = _time.strftime("%Y%m%d_%H%M%S")
+    backup_dir = os.path.join(backup_root, timestamp)
+
+    # 先确认真的有可迁移的文件再创建 backup 目录
+    has_old = any(os.path.exists(os.path.join(old_dir, f)) for f in old_files)
+    if not has_old:
+        return {"migrated": [], "backup_dir": None, "old_dir": old_dir}
+
+    migrated = []
+    try:
+        os.makedirs(backup_dir, exist_ok=True)
+    except Exception:
+        return {"migrated": [], "backup_dir": None, "old_dir": old_dir}
+
+    for fname in old_files:
+        old_path = os.path.join(old_dir, fname)
+        new_path = os.path.join(new_dir, fname)
+        backup_path = os.path.join(backup_dir, fname)
+
+        if not os.path.exists(old_path):
+            continue
+        if os.path.exists(new_path):
+            # 新文件已存在, 不动 (新数据是事实)
+            continue
+
+        try:
+            # 先备份, 再复制
+            shutil.copy2(old_path, backup_path)
+            shutil.copy2(old_path, new_path)
+            migrated.append(fname)
+        except Exception as e:
+            if DEBUG:
+                print(f"  ⚠️ 迁移 {fname} 失败: {e}")
+
+    return {"migrated": migrated, "backup_dir": backup_dir, "old_dir": old_dir}
+
+
+def _initialize_data_dir() -> dict:
+    """启动时初始化 (创建目录 + 迁移老数据)
+
+    在 import 时自动调用一次 (GUI 模式 / 无头模式 / 直接 import 都生效)
+    """
+    data_dir = get_data_dir()
+    mig = migrate_legacy_data()
+
+    # 打印迁移结果 (只打印真的有迁移的, 没迁移不刷屏)
+    if mig["migrated"]:
+        print(f"  📦 数据目录已就绪: {data_dir}")
+        print(f"  📂 从旧目录迁移 {len(mig['migrated'])} 个文件: {', '.join(mig['migrated'])}")
+        if mig["backup_dir"]:
+            print(f"  💾 备份位置: {mig['backup_dir']}")
+        if mig["old_dir"]:
+            print(f"  ℹ️  旧目录未删除: {mig['old_dir']} (可手动清理)")
+    else:
+        print(f"  📁 数据目录: {data_dir}")
+
+    return {"data_dir": data_dir, **mig}
+
+
+# ========= 自动初始化 (import 时执行) =========
+_init_result = _initialize_data_dir()
+DATA_DIR = _init_result["data_dir"]
+LEGACY_BACKUP_DIR = _init_result["backup_dir"]
+
+# ========= 数据文件路径 (v1.2 起统一在 DATA_DIR) =========
+# 用户配置文件路径
+USER_CONFIG_FILE = os.path.join(DATA_DIR, "user_config.json")
+
+# 黑名单车牌文件路径
+SKIP_PLATES_FILE = os.path.join(DATA_DIR, "skip_plates.json")
 
 # SQLite 处理结果数据库 (替代旧的 xlsx 累积)
-DB_FILE = os.path.join(get_user_data_dir(), "hccheck.db")
+DB_FILE = os.path.join(DATA_DIR, "hccheck.db")
 
 # ========= 运行控制 =========
 DEBUG = False            # True: 每步按 y 才走
@@ -82,22 +224,56 @@ LOGIN_PASSWORD = ""   # 留空则手动输入
 LOGIN_AUTO_SUBMIT = True  # True: 填完自动点登录; False: 等人工确认
 SCHEDULE = ""  # Cron 表达式, 如 "0 8 * * *" = 每天8点; 留空=不启用定时
 
+# ========= GUI 配置类型校验 helper =========
+def _load_bool(value, default):
+    """JSON 加载后强转 bool。容错: 任何异常 fallback 默认值。
+    接受: True/False, 0/1, "true"/"false"/"yes"/"no"/"on"/"off" 等"""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        v = value.strip().lower()
+        if v in ("true", "1", "yes", "on"):
+            return True
+        if v in ("false", "0", "no", "off", ""):
+            return False
+    return default
+
+
+def _load_int(value, default):
+    """JSON 加载后强转 int。容错"""
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return default
+
+
+def _load_float(value, default):
+    """JSON 加载后强转 float。容错"""
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return default
+
+
 # ========= 系统设置（可在 GUI 调整） =========
 _gui_cfg_file = USER_CONFIG_FILE
 if os.path.exists(_gui_cfg_file):
     import json
     try:
         _gui_cfg = json.load(open(_gui_cfg_file, "r", encoding="utf-8"))
-        LOGIN_USERNAME = _gui_cfg.get("username", LOGIN_USERNAME)
-        LOGIN_PASSWORD = _gui_cfg.get("password", LOGIN_PASSWORD)
-        LOGIN_AUTO_SUBMIT = _gui_cfg.get("auto_login", LOGIN_AUTO_SUBMIT)
-        HEADLESS = _gui_cfg.get("headless", HEADLESS)
-        SLOW = _gui_cfg.get("slow", SLOW)
-        MAX_FAIL = _gui_cfg.get("max_fail", MAX_FAIL)
-        MAX_CARS = _gui_cfg.get("max_cars", MAX_CARS)
-        SCHEDULE = _gui_cfg.get("schedule", SCHEDULE)
-    except:
-        pass
+        LOGIN_USERNAME = str(_gui_cfg.get("username", LOGIN_USERNAME) or "")
+        LOGIN_PASSWORD = str(_gui_cfg.get("password", LOGIN_PASSWORD) or "")
+        LOGIN_AUTO_SUBMIT = _load_bool(_gui_cfg.get("auto_login"), LOGIN_AUTO_SUBMIT)
+        HEADLESS = _load_bool(_gui_cfg.get("headless"), HEADLESS)
+        SLOW = _load_float(_gui_cfg.get("slow"), SLOW)
+        MAX_FAIL = _load_int(_gui_cfg.get("max_fail"), MAX_FAIL)
+        MAX_CARS = _load_int(_gui_cfg.get("max_cars"), MAX_CARS)
+        SCHEDULE = str(_gui_cfg.get("schedule", SCHEDULE) or "")
+    except Exception as e:
+        if DEBUG:
+            print(f"  ⚠️ 加载 user_config.json 失败, 使用默认值: {e}")
 
 
 # ========= 车牌识别(31 省简称) =========

@@ -28,6 +28,8 @@ sys.path.insert(0, SCRIPT_DIR)
 import config
 from run import main as run_main
 import run as _run  # 用于访问 SKIP_PLATES / _load_skip_plates() / _save_skip_plates() / _add_to_skip_plates() / _remove_from_skip_plates()
+import db          # 用于 get_run_id() (历史记录 Tab 显示本次 run)
+import db_query    # 用于 get_runs_by_run_id / export_run_to_xlsx
 
 # 用户配置文件路径（从 config 模块导入，位于用户数据目录，打包后保留）
 CONFIG_FILE = config.USER_CONFIG_FILE
@@ -81,7 +83,7 @@ class TextRedirector:
 # 主窗口
 # ============================================================
 class App(tk.Tk):
-    VERSION = "v1.1.0"
+    VERSION = "v1.2.0"
     APP_NAME = "HCCheck"
 
     def __init__(self):
@@ -142,12 +144,17 @@ class App(tk.Tk):
         self.notebook.add(self.tab_run, text="  🚀 运行  ")
         self._build_tab_run(self.tab_run)
 
-        # 标签页2: 黑名单
+        # 标签页2: 历史记录 🆕 (v1.2)
+        self.tab_history = ttk.Frame(self.notebook, padding=8)
+        self.notebook.add(self.tab_history, text="  📊 历史记录  ")
+        self._build_tab_history(self.tab_history)
+
+        # 标签页3: 黑名单
         self.tab_skip = ttk.Frame(self.notebook, padding=8)
         self.notebook.add(self.tab_skip, text="  🚫 黑名单  ")
         self._build_tab_skip(self.tab_skip)
 
-        # 标签页3: 设置
+        # 标签页4: 设置
         self.tab_settings = ttk.Frame(self.notebook, padding=8)
         self.notebook.add(self.tab_settings, text="  ⚙ 设置  ")
         self._build_tab_settings(self.tab_settings)
@@ -216,6 +223,136 @@ class App(tk.Tk):
         ttk.Button(ctrl, text="❓ 关于", command=self._about).pack(side=tk.RIGHT, padx=(0, 6))
         ttk.Button(ctrl, text="⚙ 设置",
                    command=lambda: self.notebook.select(self.tab_settings)).pack(side=tk.RIGHT)
+
+    # --------------------------------------------------------
+    # 标签页: 历史记录 🆕 v1.2
+    # --------------------------------------------------------
+    def _build_tab_history(self, parent):
+        # ── 顶部信息行: run_id + 汇总 ──
+        info = ttk.Frame(parent)
+        info.pack(fill=tk.X, pady=(0, 6))
+
+        ttk.Label(info, text="本次运行:",
+                  foreground="gray").pack(side=tk.LEFT)
+        self.history_run_id_var = tk.StringVar(value="—")
+        ttk.Label(info, textvariable=self.history_run_id_var,
+                  font=("Consolas", 10)).pack(side=tk.LEFT, padx=(4, 16))
+
+        # 汇总 (右侧)
+        self.history_summary_var = tk.StringVar(value="")
+        ttk.Label(info, textvariable=self.history_summary_var,
+                  font=("Microsoft YaHei", 10), foreground="#1a73e8").pack(side=tk.RIGHT)
+
+        # ── 表格区 ──
+        table_frame = ttk.LabelFrame(parent, text="本次车辆处理结果", padding=4)
+        table_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 6))
+
+        # Treeview (4 列: 车牌 / 类型 / 耗时 / 状态)
+        columns = ("plate", "flow_type", "duration", "status")
+        self.history_tree = ttk.Treeview(
+            table_frame, columns=columns, show="headings", height=12
+        )
+        self.history_tree.heading("plate", text="车牌")
+        self.history_tree.heading("flow_type", text="类型")
+        self.history_tree.heading("duration", text="耗时(秒)")
+        self.history_tree.heading("status", text="状态")
+
+        self.history_tree.column("plate", width=120, anchor=tk.CENTER)
+        self.history_tree.column("flow_type", width=80, anchor=tk.CENTER)
+        self.history_tree.column("duration", width=100, anchor=tk.CENTER)
+        self.history_tree.column("status", width=90, anchor=tk.CENTER)
+
+        # 滚动条
+        hist_scroll = ttk.Scrollbar(table_frame, orient=tk.VERTICAL,
+                                    command=self.history_tree.yview)
+        self.history_tree.config(yscrollcommand=hist_scroll.set)
+        self.history_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        hist_scroll.pack(side=tk.LEFT, fill=tk.Y)
+
+        # 状态着色: 成功绿 / 失败红
+        self.history_tree.tag_configure("success", foreground="#188038")
+        self.history_tree.tag_configure("failed", foreground="#d93025")
+
+        # ── 底部按钮行 ──
+        hist_btns = ttk.Frame(parent)
+        hist_btns.pack(fill=tk.X, pady=(4, 0))
+        ttk.Button(hist_btns, text="🔄 刷新",
+                   command=self._refresh_history_table).pack(side=tk.LEFT)
+        ttk.Button(hist_btns, text="📊 导出本次为 xlsx",
+                   command=self._export_history_xlsx).pack(side=tk.LEFT, padx=(4, 0))
+
+        # 右侧提示
+        self.history_status_var = tk.StringVar(value="")
+        ttk.Label(hist_btns, textvariable=self.history_status_var,
+                  foreground="gray").pack(side=tk.RIGHT)
+
+        # 首次加载
+        self._refresh_history_table()
+
+    def _refresh_history_table(self):
+        """刷新历史记录表格 (从 SQLite 读本次 run 的数据)"""
+        # 清空现有
+        for item in self.history_tree.get_children():
+            self.history_tree.delete(item)
+
+        # 拿当前 run_id
+        run_id = db.get_run_id()
+        self.history_run_id_var.set(run_id or "—")
+
+        if not run_id:
+            self.history_summary_var.set("")
+            self.history_status_var.set("未运行过")
+            return
+
+        # 查询
+        runs = db_query.get_runs_by_run_id(run_id)
+        summary = db_query.get_run_summary(run_id)
+
+        # 填充表格
+        for r in runs:
+            tag = "success" if r["status"] == "成功" else "failed"
+            self.history_tree.insert("", tk.END, values=(
+                r["plate"] or "",
+                r["flow_type"] or "",
+                round(r["duration"], 1) if r["duration"] else 0,
+                r["status"] or "",
+            ), tags=(tag,))
+
+        # 汇总
+        if summary["total"] > 0:
+            self.history_summary_var.set(
+                f"共 {summary['total']} 辆  |  ✅ {summary['success']}  |  "
+                f"❌ {summary['failed']}  |  ⏱ 平均 {summary['avg_duration']}s"
+            )
+        else:
+            self.history_summary_var.set("")
+
+        self.history_status_var.set(f"已加载 {len(runs)} 条")
+
+    def _export_history_xlsx(self):
+        """导出本次 run 的所有车为 xlsx"""
+        run_id = db.get_run_id()
+        if not run_id:
+            messagebox.showwarning("导出失败", "未运行过，无数据可导出")
+            return
+
+        # 让用户选保存路径
+        default_name = f"HCCheck_{run_id[:8]}_{time.strftime('%Y%m%d_%H%M%S')}.xlsx"
+        path = filedialog.asksaveasfilename(
+            defaultextension=".xlsx",
+            filetypes=[("Excel 文件", "*.xlsx")],
+            initialfilename=default_name,
+        )
+        if not path:
+            return
+
+        ok = db_query.export_run_to_xlsx(run_id, path)
+        if ok:
+            self.history_status_var.set(f"✅ 已导出 {os.path.basename(path)}")
+            messagebox.showinfo("导出成功", f"已导出到:\n{path}")
+        else:
+            self.history_status_var.set("❌ 导出失败，查看日志")
+            messagebox.showerror("导出失败", "请查看运行日志获取详情")
 
     # --------------------------------------------------------
     # 标签页: 设置
@@ -716,6 +853,9 @@ class App(tk.Tk):
         self.btn_stop.config(state=tk.DISABLED)
         self.plate_var.set("已停止")
         self.step_var.set("—")
+        # 🆕 v1.2: 刷新历史记录 Tab (跑完自动显示新结果)
+        if hasattr(self, "history_tree"):
+            self._refresh_history_table()
 
     def _stop(self):
         """智能停止：
