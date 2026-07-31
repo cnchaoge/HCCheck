@@ -453,9 +453,8 @@ def _close_print_preview(context, pages_before):
                             return actions;
                         }""")
                         print(f"  🔍 [STRATEGY8] {f.name}: {result}")
-                        if any('PREVIEW_false' in r or 'AUTO_CLOSE_true' in r or 'CLOSE_PRINTTASK' in r for r in result):
-                            closed = 1
-                            print(f"  ✓ 调 LODOP API 关闭预览")
+                        # 🆕 v1.2.2 第 8 轮: PREVIEW/SET_PRINT_MODE 是 no-op, 不设 closed=1
+                        # 让策略9 有机会找出真能关预览的 API
                         # 只在第一个 _workflow_tmp iframe 试一次
                         break
                     except Exception as e:
