@@ -460,6 +460,58 @@ def _close_print_preview(context, pages_before):
                     except Exception as e:
                         print(f"  ⚠️ [STRATEGY8] {f.name} 失败: {type(e).__name__}: {e}")
 
+    # 🆕 v1.2.2 策略10: OS 层关 Lodop preview native window (PowerShell)
+    # 背景: Lodop preview 是 Windows native window, JS API 管不到
+    #       前 9 个策略都试过, 只能靠 OS 层 CloseMainWindow / Stop-Process
+    # 风险: 只关标题含'打印预览'/'Lodop'/'LODOP' 的进程, 不影响 IE
+    # 仅在 Windows 运行, 其他平台跳过
+    if closed == 0 and sys.platform == "win32":
+        print(f"  🔧 [STRATEGY10] OS 层关 Lodop preview window (PowerShell)...")
+        try:
+            import subprocess
+            ps_script = '''
+$found = Get-Process | Where-Object {
+    $_.MainWindowTitle -like '*打印预览*' -or
+    $_.MainWindowTitle -like '*Lodop*' -or
+    $_.MainWindowTitle -like '*LODOP*' -or
+    $_.MainWindowTitle -like '*C-Lodop*' -or
+    $_.MainWindowTitle -like '*CLodop*'
+}
+if ($found) {
+    foreach ($p in $found) {
+        Write-Output "[DIAG] 找到预览窗口: PID=$($p.Id) Name=$($p.ProcessName) Title='$($p.MainWindowTitle)'"
+        $p.CloseMainWindow() | Out-Null
+        Start-Sleep -Milliseconds 300
+        if (-not $p.HasExited) {
+            Write-Output "[DIAG] CloseMainWindow 未生效, 强杀 PID=$($p.Id)"
+            Stop-Process -Id $p.Id -Force
+        }
+    }
+    Write-Output "[DIAG] 总共处理了 $($found.Count) 个窗口"
+} else {
+    Write-Output "[DIAG] 未找到预览窗口 (可能已关闭 或标题不匹配)"
+}
+'''
+            result = subprocess.run(
+                ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_script],
+                capture_output=True, text=True, timeout=10
+            )
+            for line in (result.stdout or "").splitlines():
+                if line.strip():
+                    print(f"  🔧 [STRATEGY10] {line.strip()}")
+            if result.stderr and result.stderr.strip():
+                print(f"  ⚠️ [STRATEGY10] stderr: {result.stderr.strip()[:200]}")
+            # 判断是否成功 (找到并处理了窗口)
+            if "[DIAG] 找到预览窗口" in (result.stdout or ""):
+                closed = 1
+                print(f"  ✓ OS 层关闭 Lodop 预览窗口")
+            elif "[DIAG] 未找到预览窗口" in (result.stdout or ""):
+                print(f"  ℹ️ 没找到预览窗口 (可能已关 或标题不匹配)")
+        except subprocess.TimeoutExpired:
+            print(f"  ⚠️ [STRATEGY10] PowerShell 超时 (10s)")
+        except Exception as e:
+            print(f"  ⚠️ [STRATEGY10] 失败: {type(e).__name__}: {e}")
+
     if closed == 0:
         print(f"  ℹ️ 打印预览可能仍在显示（不影响后续流程）")
     return closed

@@ -277,6 +277,60 @@ def test_12_popup2_strategy8_lodop_api():
     return True
 
 
+def test_13_popup2_strategy10_powershell():
+    """测试 13: popup2 策略10 OS 层 PowerShell 关 Lodop native window (v1.2.2 第 9 轮)
+
+    背景: Lodop preview 是 Windows native window, JS API 管不到
+    修法: subprocess 调 PowerShell, Get-Process 找标题含'打印预览'/'Lodop', CloseMainWindow
+    """
+    print("\n=== Test 13: popup2 策略10 (PowerShell) ===")
+    src = open(os.path.join(SCRIPT_DIR, "popups/p2_tech_review.py"), encoding="utf-8").read()
+
+    # 检查策略10存在
+    assert "STRATEGY10" in src, "❌ popup2 没有 STRATEGY10"
+    print("  ✅ popup2 策略10 STRATEGY10 存在")
+
+    # 检查 subprocess + PowerShell
+    for kw in ["subprocess", "powershell", "CloseMainWindow", "Get-Process"]:
+        assert kw in src, f"❌ 策略10 缺关键字: {kw}"
+    print("  ✅ 用 subprocess + powershell + Get-Process + CloseMainWindow")
+
+    # 检查只匹配预览窗口 (不杀 IE/Chrome)
+    for kw in ["打印预览", "Lodop", "LODOP"]:
+        assert kw in src, f"❌ 策略10 缺窗口标题关键词: {kw}"
+    print("  ✅ 窗口标题关键词: 打印预览 / Lodop / LODOP")
+
+    # 检查 win32 平台守卫
+    assert 'sys.platform == "win32"' in src, "❌ 策略10 缺 win32 平台守卫"
+    print("  ✅ 只在 Windows 平台执行 (sys.platform == 'win32')")
+
+    return True
+
+
+
+    """测试 12: popup2 策略8 进 _workflow_tmp iframe 调 LODOP API (v1.2.2 第 6 轮)
+
+    背景: 策略7 诊断定位 _workflow_tmp iframe 是 Lodop 渲染位置, window.LODOP 在那里定义
+    修法: 进 iframe 调 LODOP.PREVIEW(false) + SET_PRINT_MODE('AUTO_CLOSE_PREWINDOW', true) + CLOSE_PRINTTASK()
+    """
+    print("\n=== Test 12: popup2 策略8 (LODOP API) ===")
+    src = open(os.path.join(SCRIPT_DIR, "popups/p2_tech_review.py"), encoding="utf-8").read()
+
+    # 检查策略8存在
+    assert "STRATEGY8" in src, "❌ popup2 没有 STRATEGY8"
+    print("  ✅ popup2 策略8 STRATEGY8 存在")
+
+    # 检查找 _workflow_tmp iframe
+    assert "workflow_tmp" in src, "❌ popup2 策略8 没找 _workflow_tmp iframe"
+    print("  ✅ 策略8 找 _workflow_tmp iframe")
+
+    # 检查调关键 LODOP API
+    for api in ["PREVIEW", "SET_PRINT_MODE", "AUTO_CLOSE_PREWINDOW", "CLOSE_PRINTTASK"]:
+        assert api in src, f"❌ 策略8 缺 LODOP API: {api}"
+    print("  ✅ 调用 PREVIEW / SET_PRINT_MODE / AUTO_CLOSE_PREWINDOW / CLOSE_PRINTTASK")
+    return True
+
+
 def test_10_popup4_excludes_main_page():
     """测试 10: popup4 _close_residual_popups 豁免主页面 (v1.2.2 修复)
 
@@ -371,6 +425,7 @@ if __name__ == "__main__":
         test_10_popup4_excludes_main_page()
         test_11_popup2_strategy5()
         test_12_popup2_strategy8_lodop_api()
+        test_13_popup2_strategy10_powershell()
 
         print("\n" + "=" * 60)
         print("  ✅ 全部测试通过!")
