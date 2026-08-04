@@ -165,7 +165,7 @@ def _click_year_check(popup, context=None, main_page=None, max_retry=2):
     if context is not None:
         closed = _close_residual_popups(context, popup, main_page=main_page)
         if closed:
-            print(f"  🧹 清理 {closed} 个残留弹窗 (popup4 入口)")
+            if config.DEBUG: print(f"  🧹 清理 {closed} 个残留弹窗 (popup4 入口)")
         _wait_residual_cleared(context, popup)
 
     for attempt in range(max_retry):

@@ -186,7 +186,7 @@ def test_7_gui_loading():
                 if isinstance(target, ast.Name) and target.id == "VERSION":
                     version = node.value.value
                     break
-    assert version == "v1.2.1", f"VERSION 应为 v1.2.1, 实际 {version}"
+    assert version == "v1.2.3", f"VERSION 应为 v1.2.3, 实际 {version}"
     print(f"  ✅ App.VERSION = {version}")
 
     # 验证 import
@@ -345,9 +345,9 @@ def test_9_no_tkinter_typos():
     assert initialfile_count >= 1, "❌ 没找到 'initialfile=' (导出对话框应有默认文件名)"
     print(f"  ✅ 'initialfile=' 出现 {initialfile_count} 次 (xlsx + log 导出)")
 
-    # VERSION 应该是 v1.2.1
-    assert 'VERSION = "v1.2.1"' in src, "❌ VERSION 没 bump 到 v1.2.1"
-    print("  ✅ VERSION = v1.2.1")
+    # VERSION 应该是 v1.2.3
+    assert 'VERSION = "v1.2.3"' in src, "❌ VERSION 没 bump 到 v1.2.3"
+    print("  ✅ VERSION = v1.2.3")
 
     # 按钮文案应该是 "导出最近"
     assert "导出最近为 xlsx" in src, "❌ 按钮文案没改成 '导出最近'"
@@ -637,6 +637,60 @@ def test_19_log_noise_cleanup():
     return True
 
 
+def test_20_second_round_cleanup():
+    """测试 20: 第二轮去噪 - popup1/2/4 + run.py 推进和 DBG (v1.2.3)
+
+    背景: 上一轮 (Test 19) 只清了对弹窗 + STRATEGY9/10, 5 步里还有这些噪音:
+          - popup1: popup URL / frames
+          - popup2: [V1] dispatch_event 成功
+          - popup4: 🧹 清理 残留弹窗
+          - run.py: ─── 推进到下一节点 ─── 分隔符
+          - run.py: 🔍 [DBG] 当前 URL/title/is_closed (3 行)
+    修法:
+          - 5 处噪音 DEBUG-gate (popup1/2/4)
+          - 2 处直接删 (推进分隔符 + DBG 3 行)
+    """
+    print("\n=== Test 20: 第二轮去噪 ===")
+
+    # 1. popup1 URL/frames DEBUG-gate
+    p1_src = open(os.path.join(SCRIPT_DIR, "popups/p1_vehicle_check.py"), encoding="utf-8").read()
+    assert "if config.DEBUG:" in p1_src, "❌ popup1 没 config.DEBUG guard"
+    assert "🔍 popup URL" in p1_src, "❌ popup1 popup URL 丢了"
+    assert "🔍 popup frames" in p1_src, "❌ popup1 popup frames 丢了"
+    print("  ✅ popup1: popup URL/frames DEBUG-gate")
+
+    # 2. popup2 [V1] dispatch_event DEBUG-gate
+    p2_src = open(os.path.join(SCRIPT_DIR, "popups/p2_tech_review.py"), encoding="utf-8").read()
+    assert "[V1] dispatch_event" in p2_src, "❌ popup2 [V1] 丢了"
+    # 找包含 [V1] 的行, 确认有 if config.DEBUG
+    v1_lines = [l for l in p2_src.split("\n") if "[V1]" in l and "print" in l]
+    assert any("if config.DEBUG" in l for l in v1_lines), \
+        "❌ popup2 [V1] 没 DEBUG-gate"
+    print("  ✅ popup2: [V1] dispatch_event DEBUG-gate")
+
+    # 3. popup4 清理残留弹窗 DEBUG-gate
+    p4_src = open(os.path.join(SCRIPT_DIR, "popups/p4_vehicle_annual.py"), encoding="utf-8").read()
+    assert "🧹 清理" in p4_src, "❌ popup4 清理逻辑丢了"
+    cleanup_lines = [l for l in p4_src.split("\n") if "🧹 清理" in l and "print" in l]
+    assert any("if config.DEBUG" in l for l in cleanup_lines), \
+        "❌ popup4 🧹 清理没 DEBUG-gate"
+    print("  ✅ popup4: 🧹 清理残留弹窗 DEBUG-gate")
+
+    # 4. run.py ─── 推进到下一节点 ─── 已删
+    run_src = open(os.path.join(SCRIPT_DIR, "run.py"), encoding="utf-8").read()
+    assert "─── 推进到下一节点 ───" not in run_src, \
+        "❌ run.py 还有 '推进到下一节点' 分隔符 (应该删除)"
+    print("  ✅ run.py: '推进到下一节点' 分隔符已删")
+
+    # 5. run.py 🔍 [DBG] 3 行已删
+    dbg_count = run_src.count("🔍 [DBG]")
+    assert dbg_count == 0, \
+        f"❌ run.py 还有 {dbg_count} 个 🔍 [DBG] 行 (应全部删除)"
+    print(f"  ✅ run.py: 🔍 [DBG] 行全部删除 ({dbg_count} 个残留)")
+
+    return True
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print("  HCCheck v1.2 mock 测试")
@@ -657,6 +711,7 @@ if __name__ == "__main__":
         test_13_popup2_strategy10_powershell()
         test_18_popup2_cleanup()
         test_19_log_noise_cleanup()
+        test_20_second_round_cleanup()
         test_14_click_query_and_pagination()
         test_15_pagination_while_loop()
         test_16_popup2_strategy9_no_false_success()

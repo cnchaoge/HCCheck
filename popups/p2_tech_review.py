@@ -409,7 +409,7 @@ def _click_print_link_v1(wf, popup):
                     el = cont.locator(f'text="{txt}"').first
                     safe(el, timeout=3000)
                     el.dispatch_event("click")  # dispatch_event 绕过遮挡
-                    print(f"  [V1] dispatch_event 点击 '{txt}' 成功")
+                    if config.DEBUG: print(f"  [V1] dispatch_event 点击 '{txt}' 成功")
                     return True
                 except:
                     try:

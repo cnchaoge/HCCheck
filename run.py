@@ -1126,7 +1126,7 @@ def process_unmarked(page: Page, plate: str, run_from_step: Optional[str] = None
         print("  [Phase1] 创建新任务")
         popup, _ = _phase1_select_and_create(page, plate, config.MENU_FOR_NORMAL)
         handle_vehicle_check(popup, plate)
-        print("\n  ─── 推进到下一节点 ───")
+        
     else:
         print(f"  续跑: 从 {run_from_step} 开始")
 
@@ -1352,18 +1352,8 @@ def get_next_plate_from_list(page: Page) -> Optional[str]:
     Columns: Seq|Radio|ApprovalNo|AppNo|Name|Date|Phone|Plate|Color|VIN|Source
     ApprovalNo at index 2, Plate at index 7
     """
-    # 🆕 v1.2.2: 提前检查 + DBG 输出 (排查"页面加载中被关"问题)
-    try:
-        url_dbg = page.url[:80] if page.url else "(空)"
-    except Exception:
-        url_dbg = "(读取失败)"
-    try:
-        title_dbg = page.title()[:30] if page.title() else "(空)"
-    except Exception:
-        title_dbg = "(读取失败)"
-    print(f"  🔍 [DBG] 当前 URL: {url_dbg}")
-    print(f"  🔍 [DBG] 当前 title: {title_dbg}")
-    print(f"  🔍 [DBG] page.is_closed(): {page.is_closed()}")
+    # 🆕 v1.2.3: 删除原 v1.2.2 的 3 行 DBG (用户嫌啰嗦)
+    # 如果以后排查"页面被关"问题, 可临时加回这几行
 
     main_kef = get_main_kef(page)
 

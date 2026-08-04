@@ -14,8 +14,9 @@ def handle(popup, plate):
     print("  ═══════════════════")
 
     # 调试: 打印 popup 信息
-    print(f"  🔍 popup URL: {popup.url[:80]}")
-    print(f"  🔍 popup frames: {[f.name for f in popup.frames if f.name]}")
+    if config.DEBUG:
+        print(f"  🔍 popup URL: {popup.url[:80]}")
+        print(f"  🔍 popup frames: {[f.name for f in popup.frames if f.name]}")
 
     step("车辆检测: 准备提交")
     # 优先用 popup.frames 直接访问 _workflow_main
