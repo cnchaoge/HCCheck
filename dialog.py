@@ -36,11 +36,11 @@ def do_dialog(popup, action_type=None, category=config.CATEGORY_ROLE, do_full_se
             for o in range(opts.count()):
                 if action_type in opts.nth(o).text_content():
                     sel.select_option(index=o)
-                    print(f"  弹窗: 动作类型→{action_type}")
+                    if config.DEBUG: print(f"  弹窗: 动作类型→{action_type}")
                     match = True
                     break
             if not match:
-                print(f"  弹窗: 动作类型默认已是正确值")
+                if config.DEBUG: print(f"  弹窗: 动作类型默认已是正确值")
             # 选完动作类型后,等弹窗刷新(用户列表重新加载)
             pa(config.PA_AFTER_QUERY)
         except Exception as e:
@@ -52,7 +52,7 @@ def do_dialog(popup, action_type=None, category=config.CATEGORY_ROLE, do_full_se
         if sel.count() > 0:
             sel.wait_for(state="visible", timeout=5000)
             sel.select_option(label=category)
-            print(f"  弹窗: 处理人类别→{category}")
+            if config.DEBUG: print(f"  弹窗: 处理人类别→{category}")
             pa(config.PA_AFTER_MENU)
     except:
         pass
@@ -65,7 +65,7 @@ def do_dialog(popup, action_type=None, category=config.CATEGORY_ROLE, do_full_se
             sel_all = uf.get_by_role("link", name=config.BTN_SELECT_ALL)
             sel_all.wait_for(state="visible", timeout=5000)
             sel_all.click()
-            print("  弹窗: 全选")
+            if config.DEBUG: print("  弹窗: 全选")
             pa(config.PA_SHORT)
         except Exception as e:
             print(f"  弹窗: 全选跳过(可能已默认全选) ({e})")
@@ -75,7 +75,7 @@ def do_dialog(popup, action_type=None, category=config.CATEGORY_ROLE, do_full_se
         ok_btn = sub.get_by_role("button", name=config.BTN_OK)
         ok_btn.wait_for(state="visible", timeout=8000)
         ok_btn.click()
-        print("  弹窗: 确定")
+        if config.DEBUG: print("  弹窗: 确定")
         pa(config.PA_AFTER_QUERY)
     except Exception as e:
         print(f"  弹窗: 确定按钮找不到({e})")

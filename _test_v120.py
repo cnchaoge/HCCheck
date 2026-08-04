@@ -3,6 +3,7 @@
 不依赖 Playwright / 真实运管站系统。
 """
 import os
+import re
 import sys
 import time
 
@@ -546,6 +547,96 @@ def test_18_popup2_cleanup():
     return True
 
 
+def test_19_log_noise_cleanup():
+    """测试 19: 运行时日志去噪 — 5 处弹窗噪音 + STRATEGY9/10 噪音 DEBUG-gate (v1.2.3)
+
+    背景: 用户反馈运行时日志太啰嗦, 每辆车每个弹窗都打 "弹窗: 动作类型→X / 全选 / 确定"
+          加上 STRATEGY9/10 每次都打印所有 LODOP 方法 + PowerShell 输出细节
+    修法: 噪音 print 包裹 if config.DEBUG:, 重要行 (成功/警告/错误) 保留
+    """
+    print("\n=== Test 19: 日志去噪 ===")
+
+    # 1. dialog.py 5 处弹窗噪音 DEBUG-gate
+    dialog_src = open(os.path.join(SCRIPT_DIR, "dialog.py"), encoding="utf-8").read()
+    noisy_dialog_lines = [
+        "动作类型→",
+        "动作类型默认已是正确值",
+        "处理人类别→",
+        "弹窗: 全选",
+        "弹窗: 确定",
+    ]
+    for noisy in noisy_dialog_lines:
+        # 噪音行必须有 if config.DEBUG: 前缀
+        pattern = f"if config.DEBUG: print.*\\n.*\\n?.*?{re.escape(noisy)}|if config.DEBUG: print.*'{re.escape(noisy)}'|if config.DEBUG: print.*f.*\"{re.escape(noisy)}"
+        # 简化检查: 噪音行所在行或前一行有 'if config.DEBUG'
+        found = False
+        for i, line in enumerate(dialog_src.split("\n")):
+            if noisy in line:
+                # 噪音行在同一行 或 前一行
+                if "if config.DEBUG" in line or (i > 0 and "if config.DEBUG" in dialog_src.split("\n")[i-1]):
+                    found = True
+                    break
+        assert found, f"❌ dialog.py 噪音没 DEBUG-gate: {noisy}"
+    print(f"  ✅ dialog.py {len(noisy_dialog_lines)} 处弹窗噪音 DEBUG-gate")
+
+    # 2. dialog.py 重要错误保留 (没 DEBUG-gate)
+    important_dialog_lines = [
+        "动作类型跳过",          # 错误
+        "全选跳过",              # 警告
+        "确定按钮找不到",        # 错误
+    ]
+    for important in important_dialog_lines:
+        found_unconditional = False
+        for i, line in enumerate(dialog_src.split("\n")):
+            if important in line and 'print' in line:
+                # 这行不能有 if config.DEBUG
+                if "if config.DEBUG" not in line:
+                    found_unconditional = True
+                    break
+        assert found_unconditional, f"❌ dialog.py 重要错误被误 DEBUG-gate: {important}"
+    print(f"  ✅ dialog.py {len(important_dialog_lines)} 处错误/警告保留 (无 DEBUG-gate)")
+
+    # 3. p2_tech_review.py STRATEGY9/10 噪音 DEBUG-gate
+    p2_src = open(os.path.join(SCRIPT_DIR, "popups/p2_tech_review.py"), encoding="utf-8").read()
+    noisy_p2_lines = [
+        "🔍 [STRATEGY9] 探测 LODOP close API",
+        "🔍 [STRATEGY9] {r}",
+        "🔍 [STRATEGY9] (猜)",
+        "🔧 [STRATEGY10] OS 层关 Lodop preview window",
+        "🔧 [STRATEGY10] {line.strip()}",
+    ]
+    for noisy in noisy_p2_lines:
+        found = False
+        for line in p2_src.split("\n"):
+            if noisy in line and 'print' in line:
+                if "if config.DEBUG" in line:
+                    found = True
+                    break
+        assert found, f"❌ p2 STRATEGY9/10 噪音没 DEBUG-gate: {noisy}"
+    print(f"  ✅ p2_tech_review.py {len(noisy_p2_lines)} 处 STRATEGY9/10 噪音 DEBUG-gate")
+
+    # 4. p2_tech_review.py 重要成功/警告保留
+    important_p2_lines = [
+        "✓ OS 层关闭 Lodop 预览窗口",     # 成功 — 必须看到
+        "ℹ️ 没找到预览窗口",                # 信息 — 有意义的
+        "⚠️ [STRATEGY10] stderr",          # 警告
+        "⚠️ [STRATEGY10] PowerShell 超时",  # 警告
+        "⚠️ [STRATEGY10] 失败",             # 警告
+        "⚠️ [STRATEGY9] {f.name} 失败",    # 警告
+    ]
+    for important in important_p2_lines:
+        found_unconditional = False
+        for line in p2_src.split("\n"):
+            if important in line and ('print' in line or 'Write-Output' in line):
+                if "if config.DEBUG" not in line:
+                    found_unconditional = True
+                    break
+        assert found_unconditional, f"❌ p2 重要输出被误 DEBUG-gate: {important}"
+    print(f"  ✅ p2_tech_review.py {len(important_p2_lines)} 处成功/警告保留")
+
+    return True
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print("  HCCheck v1.2 mock 测试")
@@ -565,6 +656,7 @@ if __name__ == "__main__":
         test_10_popup4_excludes_main_page()
         test_13_popup2_strategy10_powershell()
         test_18_popup2_cleanup()
+        test_19_log_noise_cleanup()
         test_14_click_query_and_pagination()
         test_15_pagination_while_loop()
         test_16_popup2_strategy9_no_false_success()

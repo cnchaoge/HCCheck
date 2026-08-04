@@ -206,7 +206,7 @@ def _close_print_preview(context, pages_before):
     # 背景: v1.2.2 时调了 SET_PRINT_MODE / PREVIEW(false) 等都是 no-op
     #       现在只保留 close 类方法的探测, 减少噪音
     if preview_closed == 0:
-        print(f"  🔍 [STRATEGY9] 探测 LODOP close API...")
+        if config.DEBUG: print(f"  🔍 [STRATEGY9] 探测 LODOP close API...")
         for p in context.pages:
             for f in p.frames:
                 fname = (f.name or '').lower()
@@ -232,12 +232,12 @@ def _close_print_preview(context, pages_before):
                             return actions;
                         }""")
                         for r in result:
-                            print(f"  🔍 [STRATEGY9] {r}")
+                            if config.DEBUG: print(f"  🔍 [STRATEGY9] {r}")
                         # 只在真的调了 close 类方法时才算成功
                         if any('called' in r for r in result):
                             pa(config.PA_SHORT)
                             preview_closed = 1
-                            print(f"  🔍 [STRATEGY9] (猜) 真 close API 调用了, 实际效果需看预览窗口")
+                            if config.DEBUG: print(f"  🔍 [STRATEGY9] (猜) 真 close API 调用了, 实际效果需看预览窗口")
                         break
                     except Exception as e:
                         print(f"  ⚠️ [STRATEGY9] {f.name} 失败: {type(e).__name__}: {e}")
@@ -248,7 +248,7 @@ def _close_print_preview(context, pages_before):
     # 风险: 只关标题含'打印预览'/'Lodop'/'LODOP'/'C-Lodop'/'CLodop' 的进程, 不影响 IE/Chrome
     # 仅在 Windows 运行, 其他平台跳过
     if preview_closed == 0 and sys.platform == "win32":
-        print(f"  🔧 [STRATEGY10] OS 层关 Lodop preview window (PowerShell)...")
+        if config.DEBUG: print(f"  🔧 [STRATEGY10] OS 层关 Lodop preview window (PowerShell)...")
         try:
             import subprocess
             ps_script = '''
@@ -280,7 +280,7 @@ if ($found) {
             )
             for line in (result.stdout or "").splitlines():
                 if line.strip():
-                    print(f"  🔧 [STRATEGY10] {line.strip()}")
+                    if config.DEBUG: print(f"  🔧 [STRATEGY10] {line.strip()}")
             if result.stderr and result.stderr.strip():
                 print(f"  ⚠️ [STRATEGY10] stderr: {result.stderr.strip()[:200]}")
             if "[DIAG] 找到预览窗口" in (result.stdout or ""):
