@@ -738,6 +738,120 @@ def _click_normal_review_link(contents):
     return False
 
 
+def _click_query_button(main_kef):
+    """多重策略点击'查询'按钮,刷新列表
+
+    应用: 打开普货审验页后,先点查询确保表格刷新出车
+    返回: True=成功点了, False=没找到按钮 (fallback 用现有数据,不报错)
+    """
+    # 策略1: input[value="查询"] (最常见)
+    try:
+        btn = main_kef.locator("input[value='查询']").first
+        if btn.count() > 0:
+            safe(btn.click(timeout=5000))
+            pa(config.PA_AFTER_QUERY)
+            if config.DEBUG:
+                print(f"  ✓ 点查询 (input value)")
+            return True
+    except:
+        pass
+    # 策略2: button role + name="查询"
+    try:
+        btn = main_kef.get_by_role("button", name="查询").first
+        if btn.count() > 0:
+            safe(btn.click(timeout=5000))
+            pa(config.PA_AFTER_QUERY)
+            if config.DEBUG:
+                print(f"  ✓ 点查询 (button role)")
+            return True
+    except:
+        pass
+    # 策略3: 任意带"查询"文字的 button (兜底)
+    try:
+        btn = main_kef.locator("button:has-text('查询')").first
+        if btn.count() > 0:
+            safe(btn.click(timeout=5000))
+            pa(config.PA_AFTER_QUERY)
+            if config.DEBUG:
+                print(f"  ✓ 点查询 (button text)")
+            return True
+    except:
+        pass
+    if config.DEBUG:
+        print(f"  ⚠️ 查询按钮没找到,不点")
+    return False
+
+
+def _has_next_page(main_kef):
+    """判当前页是否还有下一页 (双重保险)
+
+    用户反馈 (<15 辆的车页面下方没有下一页按钮):
+    - 当前页行数 < 15 → 最后一页,False
+    - 当前页行数 = 15 → 看"下一页"按钮是否存在
+    - "下一页"按钮 disabled → 视为最后一页,False
+    """
+    try:
+        rows = main_kef.locator(config.SELECTOR_TABLE_ROW)
+        row_count = rows.count()
+        # 情况1: 行数 < 15 = 最后一页
+        if row_count < 15:
+            return False
+        # 情况2: 行数 = 15, 找"下一页"按钮
+        next_link = main_kef.locator("a:has-text('下一页')").first
+        if next_link.count() == 0:
+            return False  # 满 15 但没按钮 = 恰好 15 条
+        # 检查是否禁用 (防止 last page 被误判)
+        try:
+            if next_link.is_disabled():
+                return False
+            cls = next_link.get_attribute("class") or ""
+            if "disabled" in cls.lower():
+                return False
+        except:
+            pass
+        return True
+    except Exception as e:
+        if config.DEBUG:
+            print(f"  ⚠️ _has_next_page 异常: {type(e).__name__}: {e}")
+        return False  # 出错就当没下一页,稳妥退出
+
+
+def _click_next_page(main_kef):
+    """点'下一页'按钮 (用户反馈: <15 辆时无此按钮)
+    返回: True=成功, False=按钮缺失/禁用/点不动
+    """
+    # 策略1: text 定位
+    try:
+        btn = main_kef.locator("a:has-text('下一页')").first
+        if btn.count() > 0:
+            try:
+                if btn.is_disabled():
+                    return False
+            except:
+                pass
+            safe(btn.click(timeout=5000))
+            pa(config.PA_AFTER_NAV)
+            if config.DEBUG:
+                print(f"  ✓ 点下一页")
+            return True
+    except:
+        pass
+    # 策略2: JS 强制点击 (有些分页是 span)
+    try:
+        btn = main_kef.locator("a:has-text('下一页')").first
+        if btn.count() > 0:
+            btn.evaluate("el => el.click()")
+            pa(config.PA_AFTER_NAV)
+            if config.DEBUG:
+                print(f"  ✓ 点下一页 (JS)")
+            return True
+    except:
+        pass
+    if config.DEBUG:
+        print(f"  ⚠️ 下一页按钮点不动")
+    return False
+
+
 def _verify_in_normal_review(page):
     """验证 main_kef 是否在普货审验列表页面
     特征: 包含'年审列表'或'年审审批流水号'或列头包含'车牌号'
@@ -1196,45 +1310,17 @@ def dispatch(page: Page, plate: str, run_from_step: Optional[str] = None, proces
         config.CURRENT_PLATE = ""
 
 # ========= 从列表拿车牌 =========
-def get_next_plate_from_list(page: Page) -> Optional[str]:
-    """从年审列表拿第一个无流水号的车牌(FIFO),跳过黑名单
-    扫描多个 table (年审列表可能分多个表格)
+def _scan_current_page_for_plate(main_kef):
+    """扫当前页所有 table, 找第一个无流水号的车牌 (FIFO)
+    返回: plate (str) 或 None
+
+    抽出是为了让 get_next_plate_from_list 翻页后能复用同一扫描逻辑
     Columns: Seq|Radio|ApprovalNo|AppNo|Name|Date|Phone|Plate|Color|VIN|Source
     ApprovalNo at index 2, Plate at index 7
-
-    🆕 v1.2.2: 加 page URL/title DBG 输出, 帮调试"页面被关"是哪一刻
     """
-    # 🆕 v1.2.2: 提前检查 + DBG 输出 (排查"页面加载中被关"问题)
-    try:
-        url_dbg = page.url[:80] if page.url else "(空)"
-    except Exception:
-        url_dbg = "(读取失败)"
-    try:
-        title_dbg = page.title()[:30] if page.title() else "(空)"
-    except Exception:
-        title_dbg = "(读取失败)"
-    print(f"  🔍 [DBG] 当前 URL: {url_dbg}")
-    print(f"  🔍 [DBG] 当前 title: {title_dbg}")
-    print(f"  🔍 [DBG] page.is_closed(): {page.is_closed()}")
-
-    main_kef = get_main_kef(page)
-    # [DEBUG] 打印前 2 个 table 的前 3 行列结构（确认列索引是否正确）
-    try:
-        tables_dbg = main_kef.locator(config.SELECTOR_TABLE)
-        for t_idx in range(min(2, tables_dbg.count())):
-            rows_dbg = tables_dbg.nth(t_idx).locator("tbody tr")
-            for r_idx in range(min(3, rows_dbg.count())):
-                cells_dbg = rows_dbg.nth(r_idx).locator("td")
-                contents = [cells_dbg.nth(c).text_content().strip()[:15] for c in range(cells_dbg.count())]
-                print(f"  🔍 [DBG] table{t_idx} 行{r_idx}: {cells_dbg.count()}列 → {contents}")
-    except Exception as e:
-        print(f"  ⚠️ [DBG] 调试日志失败: {type(e).__name__}: {e}")
-    # 扫描所有 table (可能分多页)
     try:
         tables = main_kef.locator(config.SELECTOR_TABLE)
-        table_count = tables.count()
-        print(f"  🔍 [DBG] 找到 {table_count} 个 table")
-        for t_idx in range(table_count):
+        for t_idx in range(tables.count()):
             rows = tables.nth(t_idx).locator("tbody tr")
             for r in range(rows.count()):
                 cells = rows.nth(r).locator("td")
@@ -1252,8 +1338,55 @@ def get_next_plate_from_list(page: Page) -> Optional[str]:
                             continue
                         return txt
     except Exception as e:
-        print(f"  ⚠️ 读取年审列表失败: {type(e).__name__}: {e}")
-        print(f"     page.is_closed() = {page.is_closed()}")
+        if config.DEBUG:
+            print(f"  ⚠️ _scan_current_page_for_plate 异常: {type(e).__name__}: {e}")
+    return None
+
+
+def get_next_plate_from_list(page: Page) -> Optional[str]:
+    """从年审列表拿第一个无流水号的车牌(FIFO), 跳过黑名单
+
+    🆕 翻页支持: 当前页无车时翻下一页, 直到找到或真没车
+    保留 v1.2.2 的 DBG 输出 + 全文 fallback
+
+    Columns: Seq|Radio|ApprovalNo|AppNo|Name|Date|Phone|Plate|Color|VIN|Source
+    ApprovalNo at index 2, Plate at index 7
+    """
+    # 🆕 v1.2.2: 提前检查 + DBG 输出 (排查"页面加载中被关"问题)
+    try:
+        url_dbg = page.url[:80] if page.url else "(空)"
+    except Exception:
+        url_dbg = "(读取失败)"
+    try:
+        title_dbg = page.title()[:30] if page.title() else "(空)"
+    except Exception:
+        title_dbg = "(读取失败)"
+    print(f"  🔍 [DBG] 当前 URL: {url_dbg}")
+    print(f"  🔍 [DBG] 当前 title: {title_dbg}")
+    print(f"  🔍 [DBG] page.is_closed(): {page.is_closed()}")
+
+    main_kef = get_main_kef(page)
+
+    # 🆕 翻页循环: 当前页无车 → 翻下一页 → 再扫
+    page_no = 1
+    while True:
+        plate = _scan_current_page_for_plate(main_kef)
+        if plate:
+            return plate
+        # 当前页没车 → 看还有没有下一页
+        if not _has_next_page(main_kef):
+            break
+        # 翻页
+        if not _click_next_page(main_kef):
+            print(f"  ⚠️ 翻页失败,退出")
+            break
+        # 等表格刷新
+        pa(config.PA_AFTER_NAV)
+        page_no += 1
+        if page_no > 20:  # 安全上限,防止死循环 (300 辆车才到)
+            print(f"  ⚠️ 翻页超过 20 页,强制退出 (数据异常)")
+            break
+
     # fallback: 扫全文找第一个未拉黑的车牌
     try:
         all_text = main_kef.locator("body").text_content()
@@ -1552,6 +1685,10 @@ def main() -> None:
                             pa(config.PA_AFTER_CLICK)
                             # 🆕 重试 click 后再给一次 verify, 避免下一步读死页
                             _verify_in_normal_review(page)
+
+                    # 🆕 验证在普货审验页后, 先点"查询"刷新列表 (确保表格数据最新)
+                    main_kef = get_main_kef(page)
+                    _click_query_button(main_kef)
                 except Exception as e:
                     print(f"  普货审验自动导航失败: {e}")
                     safe_input("  >>> 请手动点左侧[普货审验],然后按回车...")

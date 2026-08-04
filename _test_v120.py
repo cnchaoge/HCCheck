@@ -406,6 +406,82 @@ def test_9_no_tkinter_typos():
     return True
 
 
+def test_14_click_query_and_pagination():
+    """测试 14: _click_query_button / _has_next_page / _click_next_page 函数 (v1.2.3)
+
+    背景: 用户要求打开普货审验后先点查询, 而且要支持超过 15 辆的分页
+    修法: 加 3 个新函数 + 重构 get_next_plate_from_list 加翻页 while 循环
+    """
+    print("\n=== Test 14: 查询 + 分页函数 ===")
+    src = open(os.path.join(SCRIPT_DIR, "run.py"), encoding="utf-8").read()
+
+    # 检查 4 个新函数都存在
+    for fn in ["_click_query_button", "_has_next_page", "_click_next_page", "_scan_current_page_for_plate"]:
+        assert f"def {fn}(" in src, f"❌ run.py 缺函数: {fn}"
+        print(f"  ✅ def {fn}() 存在")
+
+    # 检查 _click_query_button 多策略
+    query_section = src[src.find("def _click_query_button"):src.find("def _has_next_page")]
+    assert "input[value='查询']" in query_section, "❌ 缺 input value 策略"
+    assert "get_by_role" in query_section, "❌ 缺 role 策略"
+    print("  ✅ _click_query_button 含 input value + role + text 三策略")
+
+    # 检查 _has_next_page 双重判断
+    has_next_section = src[src.find("def _has_next_page"):src.find("def _click_next_page")]
+    assert "row_count < 15" in has_next_section, "❌ _has_next_page 缺 < 15 判断"
+    assert "下一页" in has_next_section, "❌ _has_next_page 缺下一页按钮检查"
+    assert "is_disabled" in has_next_section, "❌ _has_next_page 缺 disabled 检查"
+    print("  ✅ _has_next_page 双重判断: < 15 + 下一页按钮 + disabled")
+
+    # 检查 _click_next_page 翻页
+    click_next_section = src[src.find("def _click_next_page"):src.find("def _verify_in_normal_review")]
+    assert "下一页" in click_next_section, "❌ _click_next_page 缺下一页定位"
+    assert "evaluate" in click_next_section, "❌ _click_next_page 缺 JS 强制点击兜底"
+    print("  ✅ _click_next_page 含 text + JS 兜底")
+
+    return True
+
+
+def test_15_pagination_while_loop():
+    """测试 15: get_next_plate_from_list 翻页 while 循环 (v1.2.3)
+
+    背景: 超过 15 辆车时, 需翻页才能拿到所有车 (用户反馈: <15 辆时无下一页按钮)
+    修法: 主函数加 while 循环, 调 _scan_current_page_for_plate + _has_next_page + _click_next_page
+    """
+    print("\n=== Test 15: 翻页 while 循环 ===")
+    src = open(os.path.join(SCRIPT_DIR, "run.py"), encoding="utf-8").read()
+
+    # 找 get_next_plate_from_list 函数体
+    func_start = src.find("def get_next_plate_from_list(")
+    next_func = src.find("# ========= table", func_start)
+    func_body = src[func_start:next_func]
+
+    # 检查 while 循环
+    assert "while True:" in func_body, "❌ get_next_plate_from_list 缺 while 循环"
+    print("  ✅ 含 while True 翻页循环")
+
+    # 检查调 3 个新函数
+    assert "_scan_current_page_for_plate" in func_body, "❌ 没调 _scan_current_page_for_plate"
+    assert "_has_next_page" in func_body, "❌ 没调 _has_next_page"
+    assert "_click_next_page" in func_body, "❌ 没调 _click_next_page"
+    print("  ✅ 调用 _scan_current_page_for_plate / _has_next_page / _click_next_page")
+
+    # 检查安全上限 (防止死循环)
+    assert "page_no > 20" in func_body, "❌ 没设安全上限"
+    print("  ✅ 安全上限 page_no > 20 防死循环")
+
+    # 检查 _click_query_button 在主循环被调用
+    main_loop_section = src[src.find("# === 第三步:"):src.find("# 🆕 v1.2.2: 读 table 前先检查")]
+    assert "_click_query_button" in main_loop_section, "❌ 主循环没调 _click_query_button"
+    print("  ✅ 主循环调用 _click_query按钮 (点查询按钮)")
+
+    # 检查 PA_AFTER_NAV 用于翻页后等待
+    assert "PA_AFTER_NAV" in func_body, "❌ 翻页后没等 PA_AFTER_NAV"
+    print("  ✅ 翻页后等待 PA_AFTER_NAV")
+
+    return True
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print("  HCCheck v1.2 mock 测试")
@@ -426,6 +502,8 @@ if __name__ == "__main__":
         test_11_popup2_strategy5()
         test_12_popup2_strategy8_lodop_api()
         test_13_popup2_strategy10_powershell()
+        test_14_click_query_and_pagination()
+        test_15_pagination_while_loop()
 
         print("\n" + "=" * 60)
         print("  ✅ 全部测试通过!")
