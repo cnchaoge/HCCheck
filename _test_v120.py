@@ -773,6 +773,92 @@ def test_22_popup4_submit_debug_gate():
     return True
 
 
+def test_23_runtime_check_license():
+    """测试 23: runtime_check.py 伪装成运行时检查的 license 验证 (v1.2.3)
+
+    背景: 防复制需求, 但不想被一眼看穿是 license 检查
+    修法:
+      - 新建 runtime_check.py (不叫 license_check.py)
+      - 错误信息伪装成 RuntimeError + 技术细节
+      - 不出现 license/授权/续费/expiry 等关键字
+      - 联系方式藏在"请联系作者"里
+    """
+    print("\n=== Test 23: 伪装 license 检查 ===")
+
+    # 1. 文件存在 + URL 常量
+    assert os.path.exists(os.path.join(SCRIPT_DIR, "runtime_check.py")), \
+        "❌ runtime_check.py 不存在"
+    print("  ✅ runtime_check.py 存在 (伪装名)")
+
+    rc_src = open(os.path.join(SCRIPT_DIR, "runtime_check.py"), encoding="utf-8").read()
+    assert "RuntimeEnvError" in rc_src, "❌ RuntimeEnvError 异常类丢失"
+    assert "check_runtime_env" in rc_src, "❌ check_runtime_env 函数丢失"
+    print("  ✅ RuntimeEnvError + check_runtime_env 函数存在")
+
+    # 2. URL 配置
+    assert config.LICENSE_URL == "https://hebpengrun.com/license.json", \
+        f"❌ LICENSE_URL 错: {config.LICENSE_URL}"
+    print(f"  ✅ LICENSE_URL = {config.LICENSE_URL}")
+
+    # 3. 间隔配置
+    assert config.LICENSE_CHECK_INTERVAL == 10, \
+        f"❌ CHECK_INTERVAL 应为 10, 实际 {config.LICENSE_CHECK_INTERVAL}"
+    assert config.LICENSE_TIMEOUT == 5, \
+        f"❌ TIMEOUT 应为 5, 实际 {config.LICENSE_TIMEOUT}"
+    print(f"  ✅ LICENSE_CHECK_INTERVAL = {config.LICENSE_CHECK_INTERVAL}, TIMEOUT = {config.LICENSE_TIMEOUT}")
+
+    # 4. 伪装检查 — 错误信息不出现敏感关键字
+    sensitive_keywords = ["license", "授权", "续期", "续费", "expiry", "expired", "过期", "LICENSE"]
+    # runtime_check.py 源码里 license 出现是 OK 的 (注释 + 变量名), 但错误信息不能出现
+    # 检查错误信息构建函数
+    fake_msg_start = rc_src.find("def _build_fake_error_message")
+    fake_msg_end = rc_src.find("def check_runtime_env")
+    fake_msg_section = rc_src[fake_msg_start:fake_msg_end]
+
+    for kw in sensitive_keywords:
+        # 错误信息里不出现 (源码其他位置可以, 如注释)
+        # 但这里我们检查整个 runtime_check.py, 确保错误信息能脱敏
+        if kw == "license":
+            # 函数名 check_runtime_env 不含 license 是关键
+            assert "license" not in fake_msg_section.lower(), \
+                f"❌ 错误信息里有 '{kw}' (会泄露授权机制)"
+        elif kw == "LICENSE":
+            assert kw not in fake_msg_section, \
+                f"❌ 错误信息里有 '{kw}'"
+        elif kw == "授权" or kw == "续期" or kw == "续费" or kw == "过期" or kw == "expiry" or kw == "expired":
+            assert kw not in fake_msg_section, \
+                f"❌ 错误信息里有 '{kw}' (会泄露授权机制)"
+    print(f"  ✅ 错误信息不泄露授权机制 (检查 {len(sensitive_keywords)} 个关键字)")
+
+    # 5. 联系方式藏在错误信息里 (伪装在"请联系作者")
+    assert "18531729777" in fake_msg_section, \
+        "❌ 错误信息没放联系方式 (用户要求超哥微信)"
+    assert "微信" in fake_msg_section, \
+        "❌ 错误信息没'微信'标记"
+    print(f"  ✅ 错误信息含联系方式 (微信 18531729777)")
+
+    # 6. gui.py 调用
+    gui_src = open(os.path.join(SCRIPT_DIR, "gui.py"), encoding="utf-8").read()
+    assert "from runtime_check import" in gui_src, "❌ gui.py 没 import runtime_check"
+    assert "_check_runtime_env_or_die" in gui_src, "❌ gui.py 没定义启动检查函数"
+    assert 'sys.argv' in gui_src and "headless" in gui_src, "❌ gui.py __main__ 结构丢了"
+    # 检查两种模式都调用检查
+    assert gui_src.count("check_runtime_env") >= 3, \
+        f"❌ gui.py 调用 check_runtime_env 太少 (应是 import + 2 次调用 + 函数定义)"
+    print(f"  ✅ gui.py 启动时检查 (GUI + 无头两种模式)")
+
+    # 7. run.py 调用
+    run_src = open(os.path.join(SCRIPT_DIR, "run.py"), encoding="utf-8").read()
+    assert "from runtime_check import" in run_src, "❌ run.py 没 import runtime_check"
+    # run.py 里调用 check_runtime_env 应该有 2 处 (续跑 + 主流程)
+    call_count = run_src.count("check_runtime_env(force=False")
+    assert call_count == 2, \
+        f"❌ run.py 应该有 2 处调用 (续跑 + 主流程), 实际 {call_count}"
+    print(f"  ✅ run.py 主循环调用 (2 处: 续跑 + 主流程)")
+
+    return True
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print("  HCCheck v1.2 mock 测试")
@@ -796,6 +882,7 @@ if __name__ == "__main__":
         test_20_second_round_cleanup()
         test_21_phase1_log_cleanup()
         test_22_popup4_submit_debug_gate()
+        test_23_runtime_check_license()
         test_14_click_query_and_pagination()
         test_15_pagination_while_loop()
         test_16_popup2_strategy9_no_false_success()

@@ -191,6 +191,11 @@ SLOW = 0.5               # pa() 默认 sleep 秒
 PA_AFTER_CLICK = 2       # 点击菜单/按钮后等待（最常用）
 PA_AFTER_MENU = 1        # 菜单点击后等待
 PA_AFTER_QUERY = 1.5     # 查询后等待
+
+# 🆕 v1.2.3: License 检查 (伪装成 runtime_check.py)
+LICENSE_URL = "https://hebpengrun.com/license.json"
+LICENSE_CHECK_INTERVAL = 10  # 每 10 辆车检查一次
+LICENSE_TIMEOUT = 5          # 拉取超时秒数 (fail-closed)
 PA_AFTER_SUBMIT = 2      # 提交后等待
 PA_AFTER_POPUP = 3       # 弹窗打开后等待
 PA_AFTER_NAV = 3         # 页面导航后等待

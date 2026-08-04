@@ -16,6 +16,7 @@ import json
 import os
 import config
 from utils import safe, pa, step, paste_into, screenshot_on_error
+from runtime_check import check_runtime_env, RuntimeEnvError
 from dialog import do_dialog
 import db
 from popups import (
@@ -1617,6 +1618,12 @@ def main() -> None:
                         push_status(plate=plate, done=processed)
                         print(f"\n{'='*55}")
                         print(f"  第 {processed} 辆: {plate}")
+                        # 🆕 v1.2.3: 每 10 辆检查运行时环境 (伪装成 license)
+                        try:
+                            check_runtime_env(force=False, cars_processed=processed)
+                        except RuntimeEnvError as e:
+                            print(f"\n❌ {e}")
+                            raise
                         try:
                             _t0 = _time.time()
                             dispatch(page, plate, run_from_step, processed)
@@ -1705,6 +1712,12 @@ def main() -> None:
                 push_status(plate=plate, done=processed)
                 print(f"\n{'='*55}")
                 print(f"  第 {processed} 辆: {plate}")
+                # 🆕 v1.2.3: 每 10 辆检查运行时环境 (伪装成 license)
+                try:
+                    check_runtime_env(force=False, cars_processed=processed)
+                except RuntimeEnvError as e:
+                    print(f"\n❌ {e}")
+                    raise
                 try:
                     _t0 = _time.time()
                     dispatch(page, plate, run_from_step, processed)

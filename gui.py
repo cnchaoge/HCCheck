@@ -26,6 +26,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SCRIPT_DIR)
 
 import config
+from runtime_check import check_runtime_env, RuntimeEnvError
 from run import main as run_main
 import run as _run  # 用于访问 SKIP_PLATES / _load_skip_plates() / _save_skip_plates() / _add_to_skip_plates() / _remove_from_skip_plates()
 import db          # 用于 get_run_id() (历史记录 Tab 显示本次 run)
@@ -1051,11 +1052,29 @@ def _run_headless():
     run_main()
 
 
+def _check_runtime_env_or_die(gui_mode=False):
+    """🆕 v1.2.3: 启动时检查运行时环境 (伪装成 license 验证)
+    
+    Args:
+        gui_mode: True = GUI 模式 (失败弹窗), False = 无头 (失败 print)
+    """
+    try:
+        check_runtime_env(force=True)
+    except RuntimeEnvError as e:
+        if gui_mode:
+            messagebox.showerror("脚本运行错误", str(e))
+        else:
+            print(f"\n❌ {e}\n")
+        sys.exit(1)
+
+
 if __name__ == "__main__":
     if "--headless" in sys.argv:
         # 无头模式：不开 GUI，直接跑主流程
+        _check_runtime_env_or_die(gui_mode=False)
         _run_headless()
     else:
         # 正常 GUI 模式
+        _check_runtime_env_or_die(gui_mode=True)
         app = App()
         app.mainloop()
