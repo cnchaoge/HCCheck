@@ -12,6 +12,8 @@
   - JS 调用 LODOP.PREVIEW() 取消 + SetPrintMode 关闭
   - 按 Escape 多次 + Ctrl+W
 """
+import sys
+
 import config
 from utils import safe, pa, step
 from dialog import do_dialog

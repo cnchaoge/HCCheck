@@ -520,6 +520,39 @@ def test_16_popup2_strategy9_no_false_success():
     return True
 
 
+def test_17_popup2_strategy10_imports_sys():
+    """测试 17: popup2 STRATEGY10 引用 sys 必须 import (v1.2.3 修复)
+
+    背景: STRATEGY10 用 sys.platform == 'win32' 守门 Windows-only,
+          但 popup2 之前没 import sys → STRATEGY10 永远抛 NameError,
+          OS 层 PowerShell 关预览窗口 9 轮都没生效 → popup2 预览一直在
+    修法: 顶部加 import sys
+    """
+    print("\n=== Test 17: popup2 sys import ===")
+    src = open(os.path.join(SCRIPT_DIR, "popups/p2_tech_review.py"), encoding="utf-8").read()
+
+    # 检查 import sys 存在 (在 popup2 模块顶部)
+    import re
+    import_lines = re.findall(r'^import\s+sys\b', src, re.MULTILINE)
+    assert len(import_lines) >= 1, \
+        "❌ popup2 缺 import sys (STRATEGY10 用 sys.platform 会 NameError)"
+    print(f"  ✅ import sys 存在 ({len(import_lines)} 处)")
+
+    # 检查 sys.platform 用法仍在 (保留 Windows 守门)
+    assert 'sys.platform == "win32"' in src, \
+        "❌ sys.platform 守门没了 (会非 Windows 也跑 PowerShell)"
+    print("  ✅ sys.platform == 'win32' 守门保留")
+
+    # 检查 sys 在 STRATEGY10 上下文里实际被引用
+    strategy10_pos = src.find("# 🆕 v1.2.2 策略10")
+    assert strategy10_pos > 0, "❌ 找不到 STRATEGY10 注释"
+    nearby = src[strategy10_pos:strategy10_pos + 500]
+    assert "sys.platform" in nearby, "❌ STRATEGY10 附近没用 sys.platform"
+    print("  ✅ STRATEGY10 附近正确引用 sys.platform")
+
+    return True
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print("  HCCheck v1.2 mock 测试")
@@ -543,6 +576,7 @@ if __name__ == "__main__":
         test_14_click_query_and_pagination()
         test_15_pagination_while_loop()
         test_16_popup2_strategy9_no_false_success()
+        test_17_popup2_strategy10_imports_sys()
 
         print("\n" + "=" * 60)
         print("  ✅ 全部测试通过!")
