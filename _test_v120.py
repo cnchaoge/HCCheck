@@ -482,6 +482,44 @@ def test_15_pagination_while_loop():
     return True
 
 
+def test_16_popup2_strategy9_no_false_success():
+    """测试 16: popup2 STRATEGY9 不再因 SET_PRINT_MODE 'ok' 误设 closed=1 (v1.2.3 修复)
+
+    背景: STRATEGY9 看到 SET_PRINT_MODE(CLOSE_PREVIEW_WINDOW) ok 就设 closed=1
+          但 SET_PRINT_MODE 只是改配置, 不关已开预览 → 跳过了 STRATEGY8 和 STRATEGY10
+    修法: STRATEGY9 只在 'called' 出现时设 closed=1, 忽略 SET_PRINT_MODE 的 'ok'
+    """
+    print("\n=== Test 16: popup2 STRATEGY9 误判修复 ===")
+    src = open(os.path.join(SCRIPT_DIR, "popups/p2_tech_review.py"), encoding="utf-8").read()
+
+    # 找 STRATEGY9 的判定段
+    strategy9_start = src.find("# 🆕 v1.2.2 策略9")
+    strategy8_start = src.find("# 🆕 v1.2.2 策略8")
+    strategy9_section = src[strategy9_start:strategy8_start]
+
+    # 检查不再用 'ok' 误判 (这是 bug 源)
+    assert "'ok' in r" not in strategy9_section, \
+        "❌ STRATEGY9 还在用 'ok' in r 误判 (会跳过 STRATEGY8/STRATEGY10)"
+    print("  ✅ STRATEGY9 不再用 'ok' 误判")
+
+    # 检查还有 'called' 判断 (close 类 API 真调用时仍能成功)
+    assert "'called' in r" in strategy9_section, \
+        "❌ STRATEGY9 没了 'called' 判断 (真调 close 类 API 时也不能成功)"
+    print("  ✅ STRATEGY9 保留 'called' 判断")
+
+    # 检查 STRATEGY10 还在 closed == 0 时运行 (不会被 STRATEGY9 误判挡住)
+    strategy10_start = src.find("# 🆕 v1.2.2 策略10")
+    assert strategy10_start > 0, "❌ 找不到 STRATEGY10 注释"
+    strategy10_section = src[strategy10_start:strategy10_start + 800]
+    assert 'sys.platform == "win32"' in strategy10_section, \
+        "❌ STRATEGY10 平台守卫没了"
+    assert "closed == 0" in strategy10_section, \
+        "❌ STRATEGY10 条件守卫没了"
+    print("  ✅ STRATEGY10 还在 closed == 0 + win32 时运行")
+
+    return True
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print("  HCCheck v1.2 mock 测试")
@@ -504,6 +542,7 @@ if __name__ == "__main__":
         test_13_popup2_strategy10_powershell()
         test_14_click_query_and_pagination()
         test_15_pagination_while_loop()
+        test_16_popup2_strategy9_no_false_success()
 
         print("\n" + "=" * 60)
         print("  ✅ 全部测试通过!")

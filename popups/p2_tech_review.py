@@ -392,7 +392,10 @@ def _close_print_preview(context, pages_before):
                         }""")
                         for r in result:
                             print(f"  🔍 [STRATEGY9] {r}")
-                        if any('called' in r or 'ok' in r for r in result):
+                        # 🆕 v1.2.3: 只认 'called' (真的调了 close 类方法)
+                        # 之前会因 SET_PRINT_MODE 返回 'ok' 误设 closed=1, 跳过 STRATEGY10
+                        # 但 SET_PRINT_MODE 只是改配置, 不关已开预览
+                        if any('called' in r for r in result):
                             # 但其实 'ok' 可能是 SET_PRINT_MODE 配置项改了, 未必关预览
                             # 需要看预览是否真关 → 返回 True 让外层多等 1s
                             pa(config.PA_SHORT)
