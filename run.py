@@ -402,7 +402,7 @@ def _phase1_select_and_create(page, plate, menu_name):
     前提：主循环已确认工作台空,先切回工作台再创建
     """
     global _CREATE_BLOCKED_DIALOG  # 🆕 访问模块级变量需声明
-    print(f"  [Phase1] {menu_name}")
+    if config.DEBUG: print(f"  [Phase1] {menu_name}")
     main_kef = get_main_kef(page)
 
     # 切回工作台（主循环走的是"普货审验"列表路径,Phase1 必须在工作台上创建）
@@ -424,10 +424,10 @@ def _phase1_select_and_create(page, plate, menu_name):
         with page.context.expect_event("page", timeout=15000) as page_info:
             safe(main_kef.get_by_role("link", name=menu_name)).click()
         popup1 = page_info.value
-        print(f"  → 弹窗开 (expect_event 捕获)")
+        if config.DEBUG: print(f"  → 弹窗开 (expect_event 捕获)")
     except:
         # expect_event 超时, fallback 忙等
-        print("  → expect_event 超时, fallback 忙等...")
+        if config.DEBUG: print("  → expect_event 超时, fallback 忙等...")
         safe(main_kef.get_by_role("link", name=menu_name)).click()
         pa(config.PA_AFTER_CLICK)
         popup1 = None
@@ -438,7 +438,7 @@ def _phase1_select_and_create(page, plate, menu_name):
             pa(config.PA_SHORT)
     if not popup1:
         raise Exception("Phase1: 菜单弹窗未出现")
-    print(f"  → 弹窗开")
+    if config.DEBUG: print(f"  → 弹窗开")
     pa(config.PA_AFTER_QUERY)
 
     # 选车
@@ -478,7 +478,7 @@ def _phase1_select_and_create(page, plate, menu_name):
                 if radios.count() > 0:
                     radios.first.check(force=True)
                     _selected = True
-                    print(f"  ✓ frame[main_kef] 选中 radio 成功")
+                    if config.DEBUG: print(f"  ✓ frame[main_kef] 选中 radio 成功")
                     break
             except Exception as e:
                 print(f"  调试 - frame[main_kef] radio check 失败: {e}")
@@ -538,7 +538,7 @@ def _phase1_select_and_create(page, plate, menu_name):
                 btn.wait_for(state="visible", timeout=5000)
                 btn.click()
                 _ok_clicked = True
-                print(f"  ✓ frame[main_kef] 点击'确定'成功")
+                if config.DEBUG: print(f"  ✓ frame[main_kef] 点击'确定'成功")
                 break
             except Exception as e:
                 print(f"  ⚠️ frame[main_kef] 点击失败: {e}")

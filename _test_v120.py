@@ -691,6 +691,58 @@ def test_20_second_round_cleanup():
     return True
 
 
+def test_21_phase1_log_cleanup():
+    """测试 21: Phase1 噪音去噪 - 6 处 DEBUG-gate + 1 处创建任务保留 (v1.2.3)
+
+    背景: Phase1 还有这些噪音 (用户在冀J5J289 报告):
+          - [Phase1] 创建新任务 / [Phase1] 道路货物运输车辆审验 (标签)
+          - → 弹窗开 (expect_event 捕获) / → 弹窗开 (调试说明)
+          - ✓ frame[main_kef] 选中 radio / ✓ frame[main_kef] 点击'确定' (中间步)
+          - ✓ 点击'创建任务(R)'成功 (用户要求保留)
+    修法:
+          - 6 处 DEBUG-gate
+          - 创建任务成功 (force) + JS 路径保留 (不在 DEBUG-gate)
+    """
+    print("\n=== Test 21: Phase1 去噪 ===")
+
+    run_src = open(os.path.join(SCRIPT_DIR, "run.py"), encoding="utf-8").read()
+
+    # 1. 6 处噪音 DEBUG-gate
+    noisy_phase1 = [
+        "[Phase1] {menu_name}",            # 2 个 menu (道路货物运输 / 挂车及其他车辆)
+        "→ 弹窗开 (expect_event 捕获)",
+        "→ 弹窗开",
+        "✓ frame[main_kef] 选中 radio 成功",
+        "✓ frame[main_kef] 点击'确定'成功",
+    ]
+    for noisy in noisy_phase1:
+        # 检查这个 print 是否被 if config.DEBUG: 包裹
+        lines = [l for l in run_src.split("\n") if noisy in l and "print" in l]
+        assert lines, f"❌ Phase1 噪音丢了: {noisy}"
+        # 所有出现都应该有 if config.DEBUG
+        unguarded = [l for l in lines if "if config.DEBUG" not in l]
+        assert not unguarded, f"❌ Phase1 '{noisy}' 有 {len(unguarded)} 处没 DEBUG-gate: {unguarded[0].strip()}"
+    print(f"  ✅ Phase1 {len(noisy_phase1)} 类噪音全部 DEBUG-gate")
+
+    # 2. 创建任务成功保留 (force)
+    create_task_lines = [l for l in run_src.split("\n") if "点击'创建任务(R)'成功 (force)" in l and "print" in l]
+    assert create_task_lines, "❌ 创建任务成功丢了"
+    guarded = [l for l in create_task_lines if "if config.DEBUG" in l]
+    assert not guarded, \
+        f"❌ 创建任务成功 (force) 被 DEBUG-gate 了 (用户要求保留)"
+    print(f"  ✅ 创建任务成功 (force) 保留 (无 DEBUG-gate)")
+
+    # 3. 创建任务 JS 成功也保留 (对称)
+    js_create_lines = [l for l in run_src.split("\n") if "JS 点击'创建任务(R)'成功" in l and "print" in l]
+    if js_create_lines:
+        guarded = [l for l in js_create_lines if "if config.DEBUG" in l]
+        assert not guarded, \
+            f"❌ JS 创建任务成功 被 DEBUG-gate 了"
+        print(f"  ✅ 创建任务 JS 成功也保留")
+
+    return True
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print("  HCCheck v1.2 mock 测试")
@@ -712,6 +764,7 @@ if __name__ == "__main__":
         test_18_popup2_cleanup()
         test_19_log_noise_cleanup()
         test_20_second_round_cleanup()
+        test_21_phase1_log_cleanup()
         test_14_click_query_and_pagination()
         test_15_pagination_while_loop()
         test_16_popup2_strategy9_no_false_success()
