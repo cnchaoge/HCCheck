@@ -743,6 +743,36 @@ def test_21_phase1_log_cleanup():
     return True
 
 
+def test_22_popup4_submit_debug_gate():
+    """测试 22: popup4 点击提交 DEBUG-gate (v1.2.3)
+
+    背景: 用户反馈 popup4 还有 `✓ frame[_workflow_main] 点击提交` 这行啰嗦
+          但保留 `JS-click link/text/a:has-text` (能看到点了哪个链接/文字)
+    修法: 只 gate `点击提交`, 链接点击保留
+    """
+    print("\n=== Test 22: popup4 点击提交 DEBUG-gate ===")
+
+    p4_src = open(os.path.join(SCRIPT_DIR, "popups/p4_vehicle_annual.py"), encoding="utf-8").read()
+
+    # 1. 点击提交 DEBUG-gate
+    submit_lines = [l for l in p4_src.split("\n") if "点击提交" in l and "print" in l]
+    assert submit_lines, "❌ 点击提交 丢了"
+    guarded = [l for l in submit_lines if "if config.DEBUG" in l]
+    unguarded = [l for l in submit_lines if "if config.DEBUG" not in l]
+    assert guarded and not unguarded, \
+        f"❌ 点击提交没全部 DEBUG-gate (gate={len(guarded)}, unguarded={len(unguarded)})"
+    print(f"  ✅ popup4 点击提交 DEBUG-gate ({len(guarded)} 处)")
+
+    # 2. JS-click link 保留 (无 DEBUG-gate)
+    js_link_lines = [l for l in p4_src.split("\n") if "JS-click link" in l and "print" in l]
+    assert js_link_lines, "❌ JS-click link 丢了"
+    unguarded = [l for l in js_link_lines if "if config.DEBUG" not in l]
+    assert unguarded, "❌ JS-click link 被误 DEBUG-gate (用户要求保留)"
+    print(f"  ✅ popup4 JS-click link 保留 ({len(js_link_lines)} 处)")
+
+    return True
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print("  HCCheck v1.2 mock 测试")
@@ -765,6 +795,7 @@ if __name__ == "__main__":
         test_19_log_noise_cleanup()
         test_20_second_round_cleanup()
         test_21_phase1_log_cleanup()
+        test_22_popup4_submit_debug_gate()
         test_14_click_query_and_pagination()
         test_15_pagination_while_loop()
         test_16_popup2_strategy9_no_false_success()

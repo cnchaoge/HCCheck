@@ -53,14 +53,14 @@ def handle(popup, context, plate,
                     btn.first.wait_for(state="visible", timeout=5000)
                     btn.first.click(force=True)
                     submit_clicked = True
-                    print(f"  ✓ frame[{f.name}] 点击提交")
+                    if config.DEBUG: print(f"  ✓ frame[{f.name}] 点击提交")
                     break
             except:
                 continue
         if not submit_clicked:
             wf = popup.frame_locator(config.SELECTOR_FRAME_WORKFLOW_MAIN)
             safe(wf.get_by_role("button", name=config.BTN_SUBMIT), timeout=5000).click()
-            print("  ✓ 点击提交")
+            if config.DEBUG: print("  ✓ 点击提交")
     except Exception as e:
         print(f"  ⚠️ 提交按钮找不到 ({e})")
     pa(config.PA_AFTER_CLICK)
