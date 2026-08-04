@@ -193,7 +193,7 @@ PA_AFTER_MENU = 1        # 菜单点击后等待
 PA_AFTER_QUERY = 1.5     # 查询后等待
 
 # 🆕 v1.2.3: License 检查 (伪装成 runtime_check.py)
-LICENSE_URL = "https://hebpengrun.com/license.json"
+LICENSE_URL = "http://82.156.229.67/license.json"  # 🆕 腾讯云 server (LANWatch 那台)
 LICENSE_CHECK_INTERVAL = 10  # 每 10 辆车检查一次
 LICENSE_TIMEOUT = 5          # 拉取超时秒数 (fail-closed)
 PA_AFTER_SUBMIT = 2      # 提交后等待

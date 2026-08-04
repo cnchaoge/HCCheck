@@ -796,7 +796,7 @@ def test_23_runtime_check_license():
     print("  ✅ RuntimeEnvError + check_runtime_env 函数存在")
 
     # 2. URL 配置
-    assert config.LICENSE_URL == "https://hebpengrun.com/license.json", \
+    assert config.LICENSE_URL == "http://82.156.229.67/license.json", \
         f"❌ LICENSE_URL 错: {config.LICENSE_URL}"
     print(f"  ✅ LICENSE_URL = {config.LICENSE_URL}")
 
