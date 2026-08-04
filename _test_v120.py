@@ -226,57 +226,6 @@ def test_8_tab_order():
     return True
 
 
-def test_11_popup2_strategy5():
-    """测试 11: popup2 _close_print_preview 有策略5 (v1.2.2)
-
-    背景: 17:39 运管站实测 popup2 打印后 Lodop 预览不关, 旧 4 策略都失效
-    修法: 加策略5, 主动找 Lodop preview 容器里的"关闭"按钮直接点
-    """
-    print("\n=== Test 11: popup2 策略5 (Lodop 关闭按钮) ===")
-    src = open(os.path.join(SCRIPT_DIR, "popups/p2_tech_review.py"), encoding="utf-8").read()
-
-    # 检查策略5存在
-    assert "lodop_close_selectors" in src, "❌ popup2 没有 lodop_close_selectors"
-    print("  ✅ popup2 策略5 lodop_close_selectors 存在")
-
-    # 检查 selector 列表包含关键 Lodop 容器
-    for selector in [
-        "LODOP_WebPrint",     # Lodop 主预览容器 class
-        "关闭",                # 按钮文字
-    ]:
-        assert selector in src, f"❌ popup2 策略5 缺少关键 selector: {selector}"
-    print("  ✅ 包含 LODOP_WebPrint selector + '关闭' 按钮")
-
-    # 检查 fallback 到原提示
-    assert "ℹ️ 打印预览可能仍在显示" in src, "❌ 错误信息丢了"
-    print("  ✅ fallback 提示 '打印预览可能仍在显示' 保留")
-    return True
-
-
-def test_12_popup2_strategy8_lodop_api():
-    """测试 12: popup2 策略8 进 _workflow_tmp iframe 调 LODOP API (v1.2.2 第 6 轮)
-
-    背景: 策略7 诊断定位 _workflow_tmp iframe 是 Lodop 渲染位置, window.LODOP 在那里定义
-    修法: 进 iframe 调 LODOP.PREVIEW(false) + SET_PRINT_MODE('AUTO_CLOSE_PREWINDOW', true) + CLOSE_PRINTTASK()
-    """
-    print("\n=== Test 12: popup2 策略8 (LODOP API) ===")
-    src = open(os.path.join(SCRIPT_DIR, "popups/p2_tech_review.py"), encoding="utf-8").read()
-
-    # 检查策略8存在
-    assert "STRATEGY8" in src, "❌ popup2 没有 STRATEGY8"
-    print("  ✅ popup2 策略8 STRATEGY8 存在")
-
-    # 检查找 _workflow_tmp iframe
-    assert "workflow_tmp" in src, "❌ popup2 策略8 没找 _workflow_tmp iframe"
-    print("  ✅ 策略8 找 _workflow_tmp iframe")
-
-    # 检查调关键 LODOP API
-    for api in ["PREVIEW", "SET_PRINT_MODE", "AUTO_CLOSE_PREWINDOW", "CLOSE_PRINTTASK"]:
-        assert api in src, f"❌ 策略8 缺 LODOP API: {api}"
-    print("  ✅ 调用 PREVIEW / SET_PRINT_MODE / AUTO_CLOSE_PREWINDOW / CLOSE_PRINTTASK")
-    return True
-
-
 def test_13_popup2_strategy10_powershell():
     """测试 13: popup2 策略10 OS 层 PowerShell 关 Lodop native window (v1.2.2 第 9 轮)
 
@@ -493,8 +442,11 @@ def test_16_popup2_strategy9_no_false_success():
     src = open(os.path.join(SCRIPT_DIR, "popups/p2_tech_review.py"), encoding="utf-8").read()
 
     # 找 STRATEGY9 的判定段
-    strategy9_start = src.find("# 🆕 v1.2.2 策略9")
+    strategy9_start = src.find("# 🆕 v1.2.3 策略9")
     strategy8_start = src.find("# 🆕 v1.2.2 策略8")
+    if strategy8_start == -1:
+        # v1.2.3 清理后 STRATEGY8 已删, 用 STRATEGY10 作为右边界
+        strategy8_start = src.find("# 🆕 v1.2.3 策略10")
     strategy9_section = src[strategy9_start:strategy8_start]
 
     # 检查不再用 'ok' 误判 (这是 bug 源)
@@ -508,7 +460,7 @@ def test_16_popup2_strategy9_no_false_success():
     print("  ✅ STRATEGY9 保留 'called' 判断")
 
     # 检查 STRATEGY10 还在 closed == 0 时运行 (不会被 STRATEGY9 误判挡住)
-    strategy10_start = src.find("# 🆕 v1.2.2 策略10")
+    strategy10_start = src.find("# 🆕 v1.2.3 策略10")
     assert strategy10_start > 0, "❌ 找不到 STRATEGY10 注释"
     strategy10_section = src[strategy10_start:strategy10_start + 800]
     assert 'sys.platform == "win32"' in strategy10_section, \
@@ -544,11 +496,52 @@ def test_17_popup2_strategy10_imports_sys():
     print("  ✅ sys.platform == 'win32' 守门保留")
 
     # 检查 sys 在 STRATEGY10 上下文里实际被引用
-    strategy10_pos = src.find("# 🆕 v1.2.2 策略10")
+    strategy10_pos = src.find("# 🆕 v1.2.3 策略10")
     assert strategy10_pos > 0, "❌ 找不到 STRATEGY10 注释"
     nearby = src[strategy10_pos:strategy10_pos + 500]
     assert "sys.platform" in nearby, "❌ STRATEGY10 附近没用 sys.platform"
     print("  ✅ STRATEGY10 附近正确引用 sys.platform")
+
+    return True
+
+
+def test_18_popup2_cleanup():
+    """测试 18: popup2 v1.2.3 清理后, 只剩 STRATEGY9 + STRATEGY10 (v1.2.3 验证)
+
+    背景: 之前 9 个策略都无效, STRATEGY10 (PowerShell 强杀 native 进程) 是唯一真管用的
+          v1.2.3 删了 STRATEGY5/6/7/8 + DIAG/DIAG2 (359 行死代码), 重命名 closed → preview_closed
+    验证: 只剩 STRATEGY9 (probe) + STRATEGY10 (真管用), 变量名重命名, 函数变 200 行左右
+    """
+    print("\n=== Test 18: popup2 v1.2.3 清理 ===")
+    src = open(os.path.join(SCRIPT_DIR, "popups/p2_tech_review.py"), encoding="utf-8").read()
+
+    # 1. 检查死代码已删
+    for dead in ["STRATEGY5", "STRATEGY6", "STRATEGY7", "STRATEGY8",
+                 "lodop_close_selectors", "DIAG2"]:
+        assert dead not in src, f"❌ 死代码未删: {dead}"
+    print("  ✅ STRATEGY5/6/7/8 + lodop_close_selectors + DIAG2 全部删除")
+
+    # 2. 检查 STRATEGY9 + STRATEGY10 保留
+    assert "STRATEGY9" in src, "❌ STRATEGY9 (probe) 丢了"
+    assert "STRATEGY10" in src, "❌ STRATEGY10 (真管用) 丢了"
+    print("  ✅ STRATEGY9 (probe) + STRATEGY10 (PowerShell) 保留")
+
+    # 3. 检查变量名重命名 (preview_closed, 不再有 closed)
+    assert "preview_closed" in src, "❌ 变量没重命名 preview_closed"
+    # closed 作为独立变量名应该消失 (但作为属性/字符串名可能还在)
+    import re
+    # 找 closed = 0 / closed += 1 / closed = 1 / return closed 这类
+    closed_var_pattern = re.findall(r'^\s+closed\s*[=+]+\s', src, re.MULTILINE)
+    assert len(closed_var_pattern) == 0, f"❌ 还有 {len(closed_var_pattern)} 个 closed 变量赋值"
+    print(f"  ✅ 变量重命名: preview_closed 取代 closed ({len(closed_var_pattern)} 个残留)")
+
+    # 4. 检查函数长度变短 (< 300 行)
+    func_start = src.find("def _close_print_preview(")
+    next_func = src.find("def handle(", func_start)
+    func_body = src[func_start:next_func]
+    func_lines = func_body.count("\n")
+    assert func_lines < 300, f"❌ 函数还太长: {func_lines} 行"
+    print(f"  ✅ 函数变短: {func_lines} 行 (原来 473 行, 节省 {473-func_lines} 行)")
 
     return True
 
@@ -570,9 +563,8 @@ if __name__ == "__main__":
         test_8_tab_order()
         test_9_no_tkinter_typos()
         test_10_popup4_excludes_main_page()
-        test_11_popup2_strategy5()
-        test_12_popup2_strategy8_lodop_api()
         test_13_popup2_strategy10_powershell()
+        test_18_popup2_cleanup()
         test_14_click_query_and_pagination()
         test_15_pagination_while_loop()
         test_16_popup2_strategy9_no_false_success()

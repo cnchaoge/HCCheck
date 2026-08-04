@@ -51,21 +51,26 @@ LODOP_KEYWORDS = [
 
 
 def _close_print_preview(context, pages_before):
-    """关闭 Lodop 打印预览 - 强化版
+    """关闭 Lodop 打印预览 - v1.2.3 精简版
+
+    4 层策略 (从轻到重):
+    1. 检测新开的 page (window.open)
+    2. 按 LODOP 标题特征匹配
+    3. JS 移除 Lodop 元素 (iframe / 遮罩)
+    4. 键盘快捷键 (Escape / Ctrl+W)
+
+    LODOP preview 本身是 Windows native window, 前 4 个策略管不到,
+    真正关靠策略 10 (PowerShell 强杀 CLodopPrint32 进程).
+
+    策略 9 是探测 (万一 LODOP 升级提供真 close API)
 
     Args:
         context: Playwright BrowserContext
-        pages_before: 点击打印前的 page 列表(用于检测新开的 tab)
-
-    Lodop 预览可能是 4 种形式:
-    1. 独立的新窗口/标签页 (window.open) - 找新 page 关闭
-    2. 嵌入在业务弹窗里的 HTML 元素 - 用 JS 查找 LODOP 对象关闭
-    3. 嵌入在业务弹窗里的隐藏 iframe - 遍历所有 frame 关闭
-    4. Chrome 原生 print dialog (window.print) - 按 Escape
+        pages_before: 点击打印前的 page 列表
     """
-    closed = 0
+    preview_closed = 0
 
-    # 策略1: 检测点击后新开的 page (最可靠)
+    # 策略1: 检测点击后新开的 page (window.open)
     new_pages = [p for p in context.pages if p not in pages_before]
     for p in new_pages:
         try:
@@ -79,15 +84,15 @@ def _close_print_preview(context, pages_before):
             # 直接关 tab
             try:
                 p.close()
-                closed += 1
+                preview_closed += 1
                 print(f"  ✓ 关闭新 page")
             except Exception as e:
                 print(f"  关闭新 page 失败: {e}")
         except:
             continue
 
-    # 策略2: 遍历所有 pages 找 Lodop 特征
-    if closed == 0:
+    # 策略2: 按标题特征匹配 LODOP 预览
+    if preview_closed == 0:
         for p in context.pages:
             try:
                 url = (p.url or "").lower()
@@ -109,7 +114,7 @@ def _close_print_preview(context, pages_before):
                         pass
                     try:
                         p.close()
-                        closed += 1
+                        preview_closed += 1
                         print(f"  ✓ 关闭 Lodop 预览 (按特征匹配)")
                     except:
                         pass
@@ -117,13 +122,12 @@ def _close_print_preview(context, pages_before):
                 continue
 
     # 策略3: JS 移除 Lodop 元素 (iframe / 遮罩)
-    if closed == 0:
+    if preview_closed == 0:
         for p in context.pages:
             try:
                 result = p.evaluate("""() => {
                     let count = 0;
                     try {
-                        // 1. 移除 Lodop 相关 iframe
                         const iframes = document.querySelectorAll('iframe');
                         for (const f of iframes) {
                             const src = (f.src || '').toLowerCase();
@@ -133,7 +137,6 @@ def _close_print_preview(context, pages_before):
                                 try { f.remove(); count++; } catch(err) {}
                             }
                         }
-                        // 2. 移除 Lodop 弹窗 div / 遮罩
                         const selectors = [
                             '[id*="LODOP"]', '[id*="lodop"]', '[id*="Lodop"]',
                             '[class*="LODOP"]', '[class*="lodop"]', '[class*="Lodop"]',
@@ -147,7 +150,6 @@ def _close_print_preview(context, pages_before):
                                 try { e.remove(); count++; } catch(err) {}
                             }
                         }
-                        // 3. 遍历所有 frame 移除 lodop 元素
                         const frames = document.querySelectorAll('iframe, frame');
                         for (const fr of frames) {
                             try {
@@ -162,26 +164,10 @@ def _close_print_preview(context, pages_before):
                                 }
                             } catch(err) {}
                         }
-                        // 4. 调用 LODOP API 关闭预览
                         if (window.LODOP) {
                             try {
                                 if (typeof window.LODOP.PREVIEW === 'function') {
                                     window.LODOP.PREVIEW(false);
-                                    count++;
-                                }
-                                if (typeof window.LODOP.SetPrintMode === 'function') {
-                                    try { window.LODOP.SetPrintMode('PREVIEW_IN_BROWSER', false); } catch(e) {}
-                                }
-                                if (typeof window.LODOP.On_Return !== 'undefined') {
-                                    window.LODOP.On_Return = null;
-                                }
-                            } catch(e) {}
-                        }
-                        if (window.getLodop) {
-                            try {
-                                const lodop = window.getLodop();
-                                if (lodop && typeof lodop.PREVIEW === 'function') {
-                                    lodop.PREVIEW(false);
                                     count++;
                                 }
                             } catch(e) {}
@@ -191,161 +177,36 @@ def _close_print_preview(context, pages_before):
                 }""")
                 if result and result > 0:
                     print(f"  ✓ JS 移除 {result} 个 Lodop/遮罩元素")
-                    closed = 1
+                    preview_closed = 1
                     break
             except:
                 continue
 
     # 策略4: 键盘快捷键 (Escape / Ctrl+W)
-    if closed == 0:
+    if preview_closed == 0:
         for p in context.pages:
             try:
                 p.keyboard.press("Escape")
                 pa(config.PA_SHORT)
                 p.keyboard.press("Escape")
                 pa(config.PA_SHORT)
-                # Ctrl+W 关 tab
                 p.keyboard.press("Control+w")
                 pa(config.PA_SHORT)
             except:
                 pass
-        # 再 check 一遍 pages 数量
         new_after_kb = [p for p in context.pages if p not in pages_before]
         for p in new_after_kb:
             try:
                 p.close()
-                closed += 1
+                preview_closed += 1
             except:
                 pass
 
-    # 🆕 v1.2.2 策略5: 找 Lodop preview 容器里的"关闭"按钮直接点
-    # 背景: 17:39 运管站实测 popup2 打印后预览不关, 窗口可见 Lodop 的 "关闭" 按钮
-    #       (顶部工具栏: 沧州运政 / 打印预览 / 设置 / 关闭 / 100%)
-    #       Lodop preview 是 HTML 嵌入 popup 页面, 不是独立窗口也不是 LODOP 对象
-    #       策略 1-4 都失效, 这个是唯一靠 DOM 能点到的入口
-    if closed == 0:
-        lodop_close_selectors = [
-            'div.LODOP_WebPrint button:has-text("关闭")',
-            'div[class*="LODOP"] button:has-text("关闭")',
-            'div[class*="lodop"] button:has-text("关闭")',
-            'div[class*="Lodop"] button:has-text("关闭")',
-            'div[role="dialog"] button:has-text("关闭")',
-            # Lodop 预览顶部的关闭链接 (不是 button)
-            'a:has-text("关闭"):visible',
-        ]
-        for p in context.pages:
-            for sel in lodop_close_selectors:
-                try:
-                    btn = p.locator(sel).first
-                    if btn.is_visible():
-                        btn.click(timeout=2000)
-                        print(f"  ✓ 点击 Lodop preview 关闭按钮 (selector: {sel[:40]})")
-                        closed = 1
-                        break
-                except:
-                    continue
-            if closed:
-                break
-
-    # 🆕 v1.2.2 策略6: 诊断 — 打印所有含'关闭'文字的可见元素 HTML (不动点击)
-    # 背景: 策略5 selector 都未命中, 需要看 Lodop 工具栏真实 DOM 结构
-    #       帮下一次修复加精准 selector (不点, 只诊断)
-    if closed == 0:
-        print(f"  🔍 [DIAG] 策略5 未命中, 打印所有含'关闭'的可见元素 HTML...")
-        diag_total = 0
-        for p in context.pages:
-            try:
-                elements_info = p.evaluate("""() => {
-                    const results = [];
-                    const all = document.querySelectorAll('*');
-                    for (const el of all) {
-                        // 只看元素自己的文本 (不含子元素)
-                        const ownText = Array.from(el.childNodes)
-                            .filter(n => n.nodeType === 3)
-                            .map(n => n.textContent.trim())
-                            .join('');
-                        if (ownText === '关闭') {
-                            const rect = el.getBoundingClientRect();
-                            const style = window.getComputedStyle(el);
-                            const visible = rect.width > 0 && rect.height > 0
-                                && style.visibility !== 'hidden' && style.display !== 'none';
-                            results.push({
-                                tag: el.tagName,
-                                cls: el.className || '',
-                                id: el.id || '',
-                                parentTag: el.parentElement ? el.parentElement.tagName : '',
-                                parentCls: el.parentElement ? (el.parentElement.className || '') : '',
-                                grandparentTag: el.parentElement && el.parentElement.parentElement ? el.parentElement.parentElement.tagName : '',
-                                grandparentCls: el.parentElement && el.parentElement.parentElement ? (el.parentElement.parentElement.className || '') : '',
-                                href: el.href || '',
-                                visible: visible,
-                                outerHTML: el.outerHTML.substring(0, 250),
-                            });
-                        }
-                    }
-                    return results;
-                }""")
-                if elements_info:
-                    page_url = (p.url or '')[:50]
-                    print(f"  🔍 [DIAG] page[{page_url}]: 找到 {len(elements_info)} 个含'关闭'的元素:")
-                    for i, info in enumerate(elements_info[:8]):  # 最多打 8 个
-                        print(f"    [{i+1}] <{info['tag']}> class='{info['cls'][:30]}' id='{info['id'][:15]}' visible={info['visible']}")
-                        print(f"         parent=<{info['parentTag']}> class='{info['parentCls'][:30]}'")
-                        print(f"         grandparent=<{info['grandparentTag']}> class='{info['grandparentCls'][:30]}'")
-                        if info['href']:
-                            print(f"         href: {info['href'][:80]}")
-                        print(f"         outerHTML: {info['outerHTML'][:200]}")
-                    diag_total += len(elements_info)
-            except Exception as e:
-                print(f"  ⚠️ [DIAG] page evaluate 失败: {type(e).__name__}: {e}")
-        if diag_total == 0:
-            print(f"  🔍 [DIAG] 全部 page 里都没找到含'关闭'文字的元素 → Lodop preview 可能不在 popup 的 DOM 里")
-
-    # 🆕 v1.2.2 策略7: 诊断升级 — 列出所有 page + iframe + iframe 内容 (定位 Lodop preview 在哪)
-    if closed == 0:
-        print(f"  🔍 [DIAG2] 列出所有 page + iframe 详情, 定位 Lodop preview...")
-        print(f"  🔍 [DIAG2] context.pages 总数: {len(context.pages)}")
-        for idx, p in enumerate(context.pages):
-            try:
-                p_url = (p.url or '')[:80]
-                try:
-                    p_title = (p.title() or '')[:30]
-                except Exception:
-                    p_title = '(读取失败)'
-                print(f"  🔍 [DIAG2] [{idx}] url={p_url} title={p_title}")
-
-                # 列出所有 iframes + 每个 iframe 的 body 头 200 字
-                try:
-                    frames = p.frames
-                    print(f"  🔍 [DIAG2]   iframes: {len(frames)}")
-                    for f_idx, f in enumerate(frames):
-                        try:
-                            f_name = f.name or '(unnamed)'
-                            f_url = (f.url or '')[:60]
-                            # 拿 iframe body 头 200 字
-                            try:
-                                f_body = f.evaluate("() => (document.body && document.body.textContent || '').substring(0, 200)")
-                            except Exception:
-                                f_body = '(读取失败)'
-                            # 检查是否含 Lodop 特征
-                            has_lodop_kw = any(kw in (f_body or '').lower() for kw in ['lodop', '打印', 'preview', '关闭'])
-                            marker = ' 👀 LODOP候选' if has_lodop_kw else ''
-                            print(f"  🔍 [DIAG2]     [{f_idx}] name={f_name} url={f_url}{marker}")
-                            print(f"  🔍 [DIAG2]        body: {f_body[:150]}")
-                        except Exception as fe:
-                            print(f"  🔍 [DIAG2]     [{f_idx}] 读取失败: {fe}")
-                except Exception as fe:
-                    print(f"  🔍 [DIAG2]   iframes 列表失败: {fe}")
-            except Exception as pe:
-                print(f"  🔍 [DIAG2] [{idx}] 读取 page 失败: {pe}")
-
-    if closed == 0:
-        print(f"  ℹ️ 打印预览可能仍在显示（不影响后续流程）")
-
-    # 🆕 v1.2.2 策略9: 列 LODOP 所有方法 + 试常见 close 相关 API
-    # 背景: 策略8 PREVIEW(false) 是 no-op, 需找出真能关已开预览的 API
-    if closed == 0:
-        print(f"  🔍 [STRATEGY9] 列 LODOP 方法 + 试 close 相关 API...")
+    # 🆕 v1.2.3 策略9: 探测 LODOP close API (probe, 万一 LODOP 升级有真 close API)
+    # 背景: v1.2.2 时调了 SET_PRINT_MODE / PREVIEW(false) 等都是 no-op
+    #       现在只保留 close 类方法的探测, 减少噪音
+    if preview_closed == 0:
+        print(f"  🔍 [STRATEGY9] 探测 LODOP close API...")
         for p in context.pages:
             for f in p.frames:
                 fname = (f.name or '').lower()
@@ -353,40 +214,18 @@ def _close_print_preview(context, pages_before):
                     try:
                         result = f.evaluate("""() => {
                             const actions = [];
-                            if (!window.LODOP) {
-                                return ['no_LODOP'];
-                            }
-                            // 列所有方法/属性
-                            const allKeys = Object.keys(window.LODOP).sort();
-                            actions.push('all_keys=' + allKeys.length);
-                            // 找出 close/cancel/preview 相关的
-                            const closeKeys = allKeys.filter(k =>
-                                /close|cancel|exit|hide|destroy|dispose|release|print/i.test(k)
-                            );
-                            actions.push('close_related=[' + closeKeys.join(',') + ']');
-                            // 试调可能的 close API
+                            if (!window.LODOP) return ['no_LODOP'];
                             const tryMethods = [
                                 'ClosePrintWindow', 'CloseLodop', 'Close',
-                                'CancelPrint', 'Dispose', 'PRINT',
-                                'SET_PRINT_MODE',
+                                'CancelPrint', 'Dispose', 'CLOSE_PRINTTASK',
                             ];
                             for (const m of tryMethods) {
                                 if (typeof window.LODOP[m] === 'function') {
                                     try {
-                                        // 调 close 方法 (不传参)
-                                        if (m === 'SET_PRINT_MODE') {
-                                            // 这个需要参数, 只试 'CLOSE_LODOP_ON_COMMIT' / 'CLEAN_PRINT' 类
-                                            try { window.LODOP[m]('CLOSE_PREVIEW_WINDOW', true); actions.push(m + '(CLOSE_PREVIEW_WINDOW) ok'); } catch(e) {}
-                                            try { window.LODOP[m]('CLEAN_PRINT', true); actions.push(m + '(CLEAN_PRINT) ok'); } catch(e) {}
-                                        } else if (m === 'PRINT') {
-                                            // 不调 (会真打印)
-                                            actions.push(m + '_exists_but_skip');
-                                        } else {
-                                            window.LODOP[m]();
-                                            actions.push(m + '() called');
-                                        }
+                                        window.LODOP[m]();
+                                        actions.push(m + '() called');
                                     } catch(e) {
-                                        actions.push(m + '_err:' + e.message);
+                                        actions.push(m + '_err');
                                     }
                                 }
                             }
@@ -394,83 +233,21 @@ def _close_print_preview(context, pages_before):
                         }""")
                         for r in result:
                             print(f"  🔍 [STRATEGY9] {r}")
-                        # 🆕 v1.2.3: 只认 'called' (真的调了 close 类方法)
-                        # 之前会因 SET_PRINT_MODE 返回 'ok' 误设 closed=1, 跳过 STRATEGY10
-                        # 但 SET_PRINT_MODE 只是改配置, 不关已开预览
+                        # 只在真的调了 close 类方法时才算成功
                         if any('called' in r for r in result):
-                            # 但其实 'ok' 可能是 SET_PRINT_MODE 配置项改了, 未必关预览
-                            # 需要看预览是否真关 → 返回 True 让外层多等 1s
                             pa(config.PA_SHORT)
-                            closed = 1
-                            print(f"  🔍 [STRATEGY9] (猜) 某个 API 调用了, 实际效果需看预览窗口")
+                            preview_closed = 1
+                            print(f"  🔍 [STRATEGY9] (猜) 真 close API 调用了, 实际效果需看预览窗口")
                         break
                     except Exception as e:
                         print(f"  ⚠️ [STRATEGY9] {f.name} 失败: {type(e).__name__}: {e}")
 
-    if closed == 0:
-        print(f"  ℹ️ 打印预览可能仍在显示（不影响后续流程）")
-
-    # 🆕 v1.2.2 策略8: 进到 _workflow_tmp iframe 调 LODOP API 关预览
-    # 背景: 策略7 诊断定位到 _workflow_tmp iframe 是 Lodop 预览位置, window.LODOP 在那里定义
-    #       body 里能看到 LODOP.PRINT_INITA(...) 等代码 → LODOP 对象可用
-    #       调 PREVIEW(false) / SET_PRINT_MODE('AUTO_CLOSE_PREWINDOW', true) 关预览
-    if closed == 0:
-        print(f"  🔍 [STRATEGY8] 进 _workflow_tmp iframe 调 LODOP API 关预览...")
-        for p in context.pages:
-            for f in p.frames:
-                fname = (f.name or '').lower()
-                if 'workflow_tmp' in fname:
-                    try:
-                        result = f.evaluate("""() => {
-                            const actions = [];
-                            if (!window.LODOP) {
-                                actions.push('no_LODOP_in_iframe');
-                                return actions;
-                            }
-                            actions.push('has_LODOP');
-                            // 1. PREVIEW(false) - 取消预览
-                            try {
-                                if (typeof window.LODOP.PREVIEW === 'function') {
-                                    window.LODOP.PREVIEW(false);
-                                    actions.push('PREVIEW_false');
-                                } else {
-                                    actions.push('no_PREVIEW_method');
-                                }
-                            } catch(e) { actions.push('PREVIEW_err:' + e.message); }
-                            // 2. AUTO_CLOSE_PREWINDOW - 未来预览自动关
-                            try {
-                                if (typeof window.LODOP.SET_PRINT_MODE === 'function') {
-                                    window.LODOP.SET_PRINT_MODE('AUTO_CLOSE_PREWINDOW', true);
-                                    actions.push('AUTO_CLOSE_true');
-                                } else {
-                                    actions.push('no_SET_PRINT_MODE');
-                                }
-                            } catch(e) { actions.push('AUTO_CLOSE_err:' + e.message); }
-                            // 3. 备用 - CLOSE_PRINTTASK
-                            try {
-                                if (typeof window.LODOP.CLOSE_PRINTTASK === 'function') {
-                                    window.LODOP.CLOSE_PRINTTASK();
-                                    actions.push('CLOSE_PRINTTASK_called');
-                                } else {
-                                    actions.push('no_CLOSE_PRINTTASK');
-                                }
-                            } catch(e) { actions.push('CLOSE_PRINTTASK_err:' + e.message); }
-                            return actions;
-                        }""")
-                        print(f"  🔍 [STRATEGY8] {f.name}: {result}")
-                        # 🆕 v1.2.2 第 8 轮: PREVIEW/SET_PRINT_MODE 是 no-op, 不设 closed=1
-                        # 让策略9 有机会找出真能关预览的 API
-                        # 只在第一个 _workflow_tmp iframe 试一次
-                        break
-                    except Exception as e:
-                        print(f"  ⚠️ [STRATEGY8] {f.name} 失败: {type(e).__name__}: {e}")
-
-    # 🆕 v1.2.2 策略10: OS 层关 Lodop preview native window (PowerShell)
-    # 背景: Lodop preview 是 Windows native window, JS API 管不到
-    #       前 9 个策略都试过, 只能靠 OS 层 CloseMainWindow / Stop-Process
-    # 风险: 只关标题含'打印预览'/'Lodop'/'LODOP' 的进程, 不影响 IE
+    # 🆕 v1.2.3 策略10: OS 层关 Lodop preview native window (PowerShell) — 唯一真管用的
+    # 背景: Lodop preview 是 Windows native window (CLodopPrint32 进程), JS API 完全管不到
+    #       策略 1-9 都无效, 只剩这招: 找到进程, 先 CloseMainWindow 温和关, 没生效就 Stop-Process -Force
+    # 风险: 只关标题含'打印预览'/'Lodop'/'LODOP'/'C-Lodop'/'CLodop' 的进程, 不影响 IE/Chrome
     # 仅在 Windows 运行, 其他平台跳过
-    if closed == 0 and sys.platform == "win32":
+    if preview_closed == 0 and sys.platform == "win32":
         print(f"  🔧 [STRATEGY10] OS 层关 Lodop preview window (PowerShell)...")
         try:
             import subprocess
@@ -506,9 +283,8 @@ if ($found) {
                     print(f"  🔧 [STRATEGY10] {line.strip()}")
             if result.stderr and result.stderr.strip():
                 print(f"  ⚠️ [STRATEGY10] stderr: {result.stderr.strip()[:200]}")
-            # 判断是否成功 (找到并处理了窗口)
             if "[DIAG] 找到预览窗口" in (result.stdout or ""):
-                closed = 1
+                preview_closed = 1
                 print(f"  ✓ OS 层关闭 Lodop 预览窗口")
             elif "[DIAG] 未找到预览窗口" in (result.stdout or ""):
                 print(f"  ℹ️ 没找到预览窗口 (可能已关 或标题不匹配)")
@@ -517,9 +293,10 @@ if ($found) {
         except Exception as e:
             print(f"  ⚠️ [STRATEGY10] 失败: {type(e).__name__}: {e}")
 
-    if closed == 0:
+    if preview_closed == 0:
         print(f"  ℹ️ 打印预览可能仍在显示（不影响后续流程）")
-    return closed
+    return preview_closed
+
 
 
 def handle(popup, context, main_page, plate):
