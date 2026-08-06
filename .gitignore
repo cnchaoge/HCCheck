@@ -22,3 +22,4 @@ err_*.png
 .idea/
 *.swp
 python.zip
+*.bak.*
