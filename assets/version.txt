@@ -1,13 +1,13 @@
 # UTF-8
 #
 # Windows version resource for PyInstaller --version-file
-# HCCheck v1.1.0
+# HCCheck v1.2.4
 #
 
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(1, 1, 0, 0),
-    prodvers=(1, 1, 0, 0),
+    filevers=(1, 2, 4, 0),
+    prodvers=(1, 2, 4, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -23,7 +23,7 @@ VSVersionInfo(
           [
             StringStruct(u'ProductName', u'HCCheck'),
             StringStruct(u'FileDescription', u'\u8fd0\u7ba1\u7ad9\u8d27\u8f66\u5ba1\u9a8c\u81ea\u52a8\u5316\u5de5\u5177'),
-            StringStruct(u'FileVersion', u'1.1.0.0'),
+            StringStruct(u'FileVersion', u'1.2.4.0'),
             StringStruct(u'ContactPhone', u'18531729777\uff08\u5fae\u4fe1\uff09')
           ]
         )
