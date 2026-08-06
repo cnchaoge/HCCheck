@@ -196,6 +196,12 @@ PA_AFTER_QUERY = 1.5     # 查询后等待
 LICENSE_URL = "http://82.156.229.67/license.json"  # 🆕 腾讯云 server (LANWatch 那台)
 LICENSE_CHECK_INTERVAL = 10  # 每 10 辆车检查一次
 LICENSE_TIMEOUT = 5          # 拉取超时秒数 (fail-closed)
+
+# 🆕 v1.2.4: machine_id 验证 (远程 API)
+LICENSE_API_URL = "http://82.156.229.67/license-api/check"  # 机器白名单验证
+LICENSE_API_TIMEOUT = 5                                       # POST 超时秒数
+LICENSE_CACHE_FILE = "license_cache.json"                    # 离线缓存文件名 (放 data/ 下)
+LICENSE_CACHE_TTL = 300                                       # 缓存有效期 5 分钟 (单位: 秒)
 PA_AFTER_SUBMIT = 2      # 提交后等待
 PA_AFTER_POPUP = 3       # 弹窗打开后等待
 PA_AFTER_NAV = 3         # 页面导航后等待
