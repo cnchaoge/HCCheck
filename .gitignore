@@ -1,11 +1,15 @@
 # 用户配置（含账号密码，不提交）
 .user_config.json
 
-# 打包产物
+# 打包产物 (本地 dev 用)
 dist/
 build/
 *.spec
 *.exe
+
+# 但允许 releases/ 下的 exe (发布给用户下载)
+!releases/
+!releases/**/*.exe
 
 # Python
 __pycache__/
